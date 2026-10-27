@@ -18,10 +18,172 @@ class PetDetailPage extends StatefulWidget {
 class _PetDetailPageState extends State<PetDetailPage> {
   bool isFavorite = false;
 
+  // Report / abuse-flag state.
+  //
+  // The report document lives at `reports/<petId>_<uid>`, so "one report per
+  // user per pet" is enforced structurally by Firestore rather than by a
+  // client-side check that could race. `_petTitle` / `_petOwnerUID` are
+  // resolved from Firestore at report time so the moderator sees an accurate
+  // listing reference (widget.imagePath is only the photo URL).
+  bool _hasReported = false;
+  bool _isSubmittingReport = false;
+
+  /// Reason choices offered in the report dialog.
+  static const List<String> _reportReasons = [
+    'Misleading or fake listing',
+    'Inappropriate content',
+    'Suspected scam',
+    'Animal mistreatment',
+    'Other',
+  ];
+
   @override
   void initState() {
     super.initState();
     loadFavoriteStatus();
+    _loadReportStatus();
+  }
+
+  /// Checks whether the signed-in user already filed a report for this pet, so
+  /// the flag action can render in its resolved (already-reported) state.
+  Future<void> _loadReportStatus() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    final doc = await FirebaseFirestore.instance
+        .collection('reports')
+        .doc('${widget.petId}_${user.uid}')
+        .get();
+    if (mounted) {
+      setState(() => _hasReported = doc.exists);
+    }
+  }
+
+  /// Opens the report reason picker and, on confirm, submits the report.
+  Future<void> _openReportDialog() async {
+    String? chosenReason;
+    final detailsController = TextEditingController();
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
+          title: const Text('Report listing'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Why are you reporting this listing?'),
+                const SizedBox(height: 8),
+                // `RadioGroup` owns the selected value so the tiles do not use
+                // the deprecated `groupValue` / `onChanged` pair.
+                RadioGroup<String>(
+                  groupValue: chosenReason,
+                  onChanged: (value) =>
+                      setDialogState(() => chosenReason = value),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: _reportReasons
+                        .map(
+                          (reason) => RadioListTile<String>(
+                            title: Text(reason),
+                            value: reason,
+                            dense: true,
+                          ),
+                        )
+                        .toList(),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: detailsController,
+                  maxLength: 1000,
+                  maxLines: 3,
+                  decoration: const InputDecoration(
+                    labelText: 'Extra detail (optional)',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: chosenReason == null
+                  ? null
+                  : () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Submit'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (confirmed == true && chosenReason != null) {
+      await _submitReport(chosenReason!, detailsController.text);
+    }
+    detailsController.dispose();
+  }
+
+  /// Writes a single abuse report against this listing.
+  Future<void> _submitReport(String reason, String details) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      _showReportSnack('You must sign in to report a listing.', ok: false);
+      return;
+    }
+    setState(() => _isSubmittingReport = true);
+    try {
+      // Resolve the real title and owner so the moderator triage copy is
+      // accurate without a second read.
+      final petDoc = await FirebaseFirestore.instance
+          .collection('pets')
+          .doc(widget.petId)
+          .get();
+      final data = petDoc.data();
+      final title = data?['title']?.toString() ?? '';
+      final ownerUID = data?['userUID']?.toString() ?? '';
+
+      await FirebaseFirestore.instance
+          .collection('reports')
+          .doc('${widget.petId}_${user.uid}')
+          .set({
+        'petId': widget.petId,
+        'reporterUID': user.uid,
+        'reason': reason,
+        'details': details.trim(),
+        'status': 'open',
+        'createdAt': DateTime.now().toUtc(),
+        'petTitle': title,
+        'ownerUID': ownerUID,
+      });
+      if (mounted) {
+        setState(() => _hasReported = true);
+      }
+      _showReportSnack('Report received. Thank you.', ok: true);
+    } catch (e) {
+      debugPrint('Report failed: $e');
+      _showReportSnack('Report could not be sent. Please try again.', ok: false);
+    } finally {
+      if (mounted) {
+        setState(() => _isSubmittingReport = false);
+      }
+    }
+  }
+
+  void _showReportSnack(String message, {required bool ok}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: ok ? Colors.green : Colors.red,
+      ),
+    );
   }
 
   Future<void> loadFavoriteStatus() async {
@@ -284,6 +446,20 @@ Future<bool> toggleFavoriteStatus(
                       kinds: kinds,
                     );
                   },
+                ),
+                IconButton(
+                  tooltip: _hasReported
+                      ? 'You reported this listing'
+                      : 'Report this listing',
+                  icon: Icon(
+                    _hasReported ? Icons.flag : Icons.flag_outlined,
+                    color: _hasReported
+                        ? Colors.red
+                        : Theme.of(context).colorScheme.primary,
+                  ),
+                  onPressed: _hasReported || _isSubmittingReport
+                      ? null
+                      : _openReportDialog,
                 ),
               ],
 

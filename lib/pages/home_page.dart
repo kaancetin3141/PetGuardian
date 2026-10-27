@@ -8,7 +8,9 @@ import 'package:petguardian/pages/notification_page.dart';
 import 'package:petguardian/pages/pet_detail_page.dart';
 import 'package:petguardian/pages/shop_page.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:geolocator/geolocator.dart';
 import '../stuff/app_network_image.dart';
+import '../stuff/feed_filter.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -28,6 +30,13 @@ class _HomePageState extends State<HomePage> {
   bool _isLoading = true;
   bool _loadFailed = false;
 
+  // Feed filtering / sorting (see stuff/feed_filter.dart). The species chip
+  // is null for "all"; distance sort is resolved lazily from the device GPS.
+  String? _selectedSpecies;
+  FeedSortMode _sortMode = FeedSortMode.newest;
+  FeedLocation? _userLocation;
+  bool _isLocating = false;
+
   @override
   void initState() {
     super.initState();
@@ -46,10 +55,11 @@ class _HomePageState extends State<HomePage> {
       if (!mounted) return;
       setState(() {
         imageList = data;
-        imageList.sort((a, b) => b.timestamp.compareTo(a.timestamp));
-        filteredList = List.from(imageList);
         _isLoading = false;
       });
+      // Re-apply whatever filter/sort is active so a manual refresh does not
+      // silently reset the user's chip and sort choices.
+      filterImages();
     } catch (e) {
       if (!mounted) return;
       debugPrint('Pet akışı yüklenemedi: $e');
@@ -75,12 +85,70 @@ class _HomePageState extends State<HomePage> {
   }
 
   void filterImages() {
-    String searchTerm = searchController.text.toLowerCase();
+    final mode = _sortMode;
     setState(() {
-      filteredList = imageList.where((imageInfo) {
-        return imageInfo.title.toLowerCase().contains(searchTerm);
-      }).toList();
+      filteredList = filterAndSortPets(
+        pets: imageList,
+        query: searchController.text,
+        species: _selectedSpecies,
+        mode: mode,
+        userLocation: mode == FeedSortMode.nearest ? _userLocation : null,
+      );
     });
+  }
+
+  /// Distance from the viewer to [pet] in km, or null when either side has
+  /// no coordinates (or the viewer location is not resolved yet).
+  double? _petDistanceKm(ImageInfo pet) {
+    final origin = _userLocation;
+    if (origin == null || pet.latitude == null || pet.longitude == null) {
+      return null;
+    }
+    return distanceKm(origin.latitude, origin.longitude, pet.latitude!, pet.longitude!);
+  }
+
+  /// Renders a distance as "850 m" below a kilometre and "2,4 km" above,
+  /// with a comma decimal separator to match the Turkish UI.
+  static String _formatDistance(double km) {
+    if (km < 1) {
+      return '${(km * 1000).round()} m';
+    }
+    return '${km.toStringAsFixed(1).replaceAll('.', ',')} km';
+  }
+
+  /// Resolves the device position once, so "nearest first" sorting has an
+  /// origin. Falls back silently to newest-first ordering when the user
+  /// denies permission or geolocation is unavailable (e.g. plain HTTP web).
+  Future<void> _ensureUserLocation() async {
+    if (_userLocation != null || _isLocating) return;
+    setState(() => _isLocating = true);
+    try {
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        debugPrint('Konum izni verilmedi; mesafe s�ralamas� yap�lamayacak.');
+        return;
+      }
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 15),
+        ),
+      );
+      _userLocation = FeedLocation(position.latitude, position.longitude);
+    } catch (e) {
+      debugPrint('Konum al�namad�: $e');
+    } finally {
+      if (mounted) {
+        setState(() => _isLocating = false);
+        // Re-run the filter so the distance ordering applies now that an
+        // origin exists.
+        filterImages();
+      }
+    }
   }
 
   void _listenToUnreadCounts() {
@@ -231,25 +299,103 @@ class _HomePageState extends State<HomePage> {
         elevation: 0,
         automaticallyImplyLeading: false,
         bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(40),
+          // Search field + species chips + sort menu.
+          preferredSize: const Size.fromHeight(104),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 15),
-            child: TextField(
-              controller: searchController,
-              decoration: InputDecoration(
-                focusedBorder: OutlineInputBorder(
-                  borderSide: const BorderSide(color: Colors.black),
-                  borderRadius: BorderRadius.circular(20),
+            child: Column(
+              children: [
+                TextField(
+                  controller: searchController,
+                  decoration: InputDecoration(
+                    focusedBorder: OutlineInputBorder(
+                      borderSide: const BorderSide(color: Colors.black),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    hintText: 'Arama yapın',
+                    filled: true,
+                    fillColor: Colors.white,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(30),
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                    prefixIcon:
+                        Icon(Icons.search, color: Theme.of(context).colorScheme.primary),
+                    suffixIcon: searchController.text.isEmpty
+                        ? null
+                        : IconButton(
+                            icon: const Icon(Icons.clear),
+                            tooltip: 'Aramay� temizle',
+                            onPressed: () => searchController.clear(),
+                          ),
+                  ),
                 ),
-                hintText: 'Arama yapın',
-                filled: true,
-                fillColor: Colors.white,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(30),
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    Expanded(
+                      child: SizedBox(
+                        height: 36,
+                        child: ListView(
+                          scrollDirection: Axis.horizontal,
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.only(right: 6),
+                              child: ChoiceChip(
+                                label: const Text('T�m�'),
+                                selected: _selectedSpecies == null,
+                                onSelected: (_) {
+                                  setState(() => _selectedSpecies = null);
+                                  filterImages();
+                                },
+                              ),
+                            ),
+                            ...kFeedSpeciesOptions.map(
+                              (species) => Padding(
+                                padding: const EdgeInsets.only(right: 6),
+                                child: ChoiceChip(
+                                  label: Text(species),
+                                  selected: _selectedSpecies == species,
+                                  onSelected: (_) {
+                                    setState(() => _selectedSpecies = species);
+                                    filterImages();
+                                  },
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    PopupMenuButton<FeedSortMode>(
+                      icon: const Icon(Icons.sort),
+                      tooltip: 'S�ralama',
+                      initialValue: _sortMode,
+                      itemBuilder: (context) => const [
+                        PopupMenuItem(
+                          value: FeedSortMode.newest,
+                          child: Text('En yeni'),
+                        ),
+                        PopupMenuItem(
+                          value: FeedSortMode.oldest,
+                          child: Text('En eski'),
+                        ),
+                        PopupMenuItem(
+                          value: FeedSortMode.nearest,
+                          child: Text('En yak�n')),
+                      ],
+                      onSelected: (mode) {
+                        setState(() => _sortMode = mode);
+                        if (mode == FeedSortMode.nearest) {
+                          _ensureUserLocation();
+                        } else {
+                          filterImages();
+                        }
+                      },
+                    ),
+                  ],
                 ),
-                contentPadding: const EdgeInsets.symmetric(vertical: 10),
-                prefixIcon: Icon(Icons.search, color: Theme.of(context).colorScheme.primary),
-              ),
+              ],
             ),
           ),
         ),
@@ -403,13 +549,14 @@ class _HomePageState extends State<HomePage> {
       );
     }
     if (filteredList.isEmpty) {
-      final isSearching = searchController.text.isNotEmpty;
+      final isSearching =
+          searchController.text.isNotEmpty || _selectedSpecies != null;
       return _buildStatusView(
         context,
         icon: isSearching ? Icons.search_off : Icons.pets,
         title: isSearching ? 'Sonuç bulunamadı' : 'Henüz ilan yok',
         message: isSearching
-            ? 'Aramanızla eşleşen bir pet bulunamadı. Farklı bir kelime deneyin.'
+            ? 'Seçili filtrelerle eşleşen bir pet bulunamadı. Aramayı veya tür seçimini değiştirmeyi deneyin.'
             : 'İlk pet ilanını ekleyen siz olun! Sağ üstteki menüden pet ekleyebilirsiniz.',
       );
     }
@@ -591,6 +738,38 @@ class _HomePageState extends State<HomePage> {
               imageInfo.title,
               style: const TextStyle(fontSize: 16, color: Colors.black),
             ),
+            // Distance badge, shown only when both the viewer and the pet
+            // have coordinates. Keeps the card informative without cluttering
+            // the common case (no location yet).
+            if (_petDistanceKm(imageInfo) != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.primaryContainer,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.place,
+                        size: 12,
+                        color: Theme.of(context).colorScheme.onPrimaryContainer,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        _formatDistance(_petDistanceKm(imageInfo)!),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Theme.of(context).colorScheme.onPrimaryContainer,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.primary),
               onPressed: () {
@@ -643,13 +822,37 @@ class _HomePageState extends State<HomePage> {
   }
 }
 
-class ImageInfo {
+class ImageInfo implements FeedPetInfo {
+  @override
   final String id;
   final String imagePath;
+  @override
   final String title;
+  @override
   final DateTime timestamp;
 
-  ImageInfo(this.id, this.imagePath, this.title, this.timestamp);
+  /// `Kinds` in Firestore; the species label used by the filter chips.
+  @override
+  final String kinds;
+
+  /// Human-readable location label written by add_pet_page.dart.
+  @override
+  final String location;
+  @override
+  final double? latitude;
+  @override
+  final double? longitude;
+
+  ImageInfo(
+    this.id,
+    this.imagePath,
+    this.title,
+    this.timestamp, {
+    this.kinds = '',
+    this.location = '',
+    this.latitude,
+    this.longitude,
+  });
 }
 
 Future<List<ImageInfo>> fetchImageDataFromFirestore() async {
@@ -673,7 +876,20 @@ Future<List<ImageInfo>> fetchImageDataFromFirestore() async {
       final timestamp = rawTimestamp is Timestamp
           ? rawTimestamp.toDate()
           : DateTime.now();
-      imageData.add(ImageInfo(doc.id, imagePath, title, timestamp));
+      // Latitude/longitude are written as doubles by add_pet_page.dart but
+      // may arrive as int for documents created by older clients.
+      final rawLat = data['latitude'];
+      final rawLng = data['longitude'];
+      imageData.add(ImageInfo(
+        doc.id,
+        imagePath,
+        title,
+        timestamp,
+        kinds: data['Kinds']?.toString() ?? '',
+        location: data['location']?.toString() ?? '',
+        latitude: rawLat is num ? rawLat.toDouble() : null,
+        longitude: rawLng is num ? rawLng.toDouble() : null,
+      ));
     }
   } catch (e) {
     debugPrint('Resim verileri alınırken hata oluştu: $e');

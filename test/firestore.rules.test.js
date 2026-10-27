@@ -328,6 +328,91 @@ async function run() {
       participants: ['alice-uid', 'carol-uid'],
     })));
 
+  console.log('\n== reports (listing abuse flagging) ==');
+  // Exact payload written by pet_detail_page.dart _submitReport(). The doc ID
+  // is `<petId>_<reporterUid>` so a user can file at most one report per pet.
+  const reportPayload = {
+    petId: 'pet-1',
+    reporterUID: 'alice-uid',
+    reason: 'Sahte ilan',
+    details: 'Fotograflar baska bir hayvana ait.',
+    status: 'open',
+    createdAt: new Date(),
+    petTitle: 'Fluffy',
+    ownerUID: 'bob-uid',
+  };
+
+  await check('reporter can file a report on a listing', () =>
+    assertSucceeds(aliceDb.doc('reports/pet-1_alice-uid').set(reportPayload)));
+  await check('report must open with status open', () =>
+    assertFails(aliceDb.doc('reports/pet-2_alice-uid').set({
+      ...reportPayload, petId: 'pet-2', status: 'resolved',
+    })));
+  await check('reporterUID must match the authenticated user', () =>
+    assertFails(aliceDb.doc('reports/pet-3_eve-uid').set({
+      ...reportPayload, petId: 'pet-3', reporterUID: 'eve-uid',
+    })));
+  await check('report cannot be filed unauthenticated', () =>
+    assertFails(unauth.firestore().doc('reports/pet-1_eve-uid').set({
+      ...reportPayload, reporterUID: 'eve-uid',
+    })));
+  await check('report rejects an unknown status value', () =>
+    assertFails(aliceDb.doc('reports/pet-4_alice-uid').set({
+      ...reportPayload, petId: 'pet-4', status: 'weird',
+    })));
+  await check('report rejects an oversized reason', () =>
+    assertFails(aliceDb.doc('reports/pet-5_alice-uid').set({
+      ...reportPayload, petId: 'pet-5', reason: 'x'.repeat(121),
+    })));
+  await check('report rejects an empty petId', () =>
+    assertFails(aliceDb.doc('reports/blank_alice-uid').set({
+      ...reportPayload, petId: '',
+    })));
+
+  // reporter reads own; the listing owner and other users must not.
+  await check('reporter can read their own report', () =>
+    assertSucceeds(aliceDb.doc('reports/pet-1_alice-uid').get()));
+  await check('listing owner cannot read a report filed against them', () =>
+    assertFails(bobDb.doc('reports/pet-1_alice-uid').get()));
+  await check('another user cannot read someone elses report', () =>
+    assertFails(testEnv.authenticatedContext('carol-uid').firestore()
+      .doc('reports/pet-1_alice-uid').get()));
+
+  // No client-side rewriting or spam.
+  await check('reporter cannot rewrite their own report', () =>
+    assertFails(aliceDb.doc('reports/pet-1_alice-uid')
+      .update({ reason: 'changed my mind' })));
+  await check('reporter cannot close their own report', () =>
+    assertFails(aliceDb.doc('reports/pet-1_alice-uid')
+      .update({ status: 'dismissed' })));
+  await check('reports cannot be deleted by anyone', () =>
+    assertFails(aliceDb.doc('reports/pet-1_alice-uid').delete()));
+  await check('reports cannot be listed by a normal user', () =>
+    assertFails(aliceDb.collection('reports').get()));
+  // A second report against the same pet reuses the doc ID; since update is
+  // admin-only and create is one-shot, this is rejected (anti-spam).
+  await check('duplicate report on the same pet is rejected', () =>
+    assertFails(aliceDb.doc('reports/pet-1_alice-uid').set({
+      ...reportPayload, reason: 'ikinci kez',
+    })));
+
+  // Moderator triage.
+  await check('admin can read all reports', () =>
+    assertSucceeds(adminDb.collection('reports').get()));
+  await check('admin can triage a report status', () =>
+    assertSucceeds(adminDb.doc('reports/pet-1_alice-uid').update({
+      status: 'resolved', resolvedAt: new Date(), resolvedBy: 'admin-uid',
+      moderatorNote: 'dogrulandi',
+    })));
+  await check('admin triage cannot rewrite the claim itself', () =>
+    assertFails(adminDb.doc('reports/pet-1_alice-uid').update({
+      reason: 'rewritten',
+    })));
+  await check('non-admin cannot triage a report', () =>
+    assertFails(bobDb.doc('reports/pet-1_alice-uid').update({
+      status: 'dismissed',
+    })));
+
   await testEnv.cleanup();
 
   console.log(`\n${passed} passed, ${failed} failed`);

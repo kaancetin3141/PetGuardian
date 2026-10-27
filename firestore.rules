@@ -288,6 +288,61 @@ allow update: if isParticipantOf(resource.data)
       }
     }
 
+    // ------------------------------------------------------------------
+    // reports/{reportId}
+    //
+    // User-submitted abuse reports for a pet listing, written by
+    // pet_detail_page.dart. The document ID is `<petId>_<reporterUid>`, which
+    // makes "one open report per user per listing" a structural guarantee
+    // instead of a race: a second create on the same path is a no-op that
+    // the rules reject, so spam reports cannot be piled on.
+    //
+    // Moderators (admins) triage these. A normal user can only file and read
+    // their own report; they can never see who else reported a listing.
+    // ------------------------------------------------------------------
+    match /reports/{reportId} {
+      function reporterUID() {
+        return reportId.split('_')[1];
+      }
+
+      function validReport(data) {
+        return data.petId is string
+          && data.petId.size() > 0
+          && data.reporterUID is string
+          && data.reporterUID == request.auth.uid
+          && data.reason is string
+          && data.reason.size() > 0
+          && data.reason.size() <= 120
+          && data.details is string
+          && data.details.size() <= 1000
+          && data.status is string
+          && data.status in ['open', 'under_review', 'resolved', 'dismissed']
+          && data.createdAt is timestamp;
+      }
+
+      // The reporter reads their own report; a moderator reads all of them.
+      // A listing's owner is deliberately NOT given read access, so a report
+      // cannot be used to enumerate who flagged them.
+      allow read: if isSignedIn()
+        && (resource.data.reporterUID == request.auth.uid || isAdmin());
+
+      allow create: if isSignedIn()
+        && validReport(request.resource.data)
+        && reporterUID() == request.auth.uid
+        && request.resource.data.status == 'open';
+
+      // Moderation triage only: the reporter cannot rewrite their own claim,
+      // and only the status/resolution fields may move.
+      allow update: if isSignedIn()
+        && resource != null
+        && isAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['status', 'resolvedAt', 'resolvedBy', 'moderatorNote']);
+
+      // Reports are evidence; nobody deletes them from a client.
+      allow delete: if false;
+    }
+
     // Anything not matched above is denied.
   }
 }
