@@ -9,8 +9,10 @@ import 'package:petguardian/pages/pet_detail_page.dart';
 import 'package:petguardian/pages/shop_page.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../stuff/app_network_image.dart';
 import '../stuff/feed_filter.dart';
+import '../stuff/saved_search_store.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -37,12 +39,39 @@ class _HomePageState extends State<HomePage> {
   FeedLocation? _userLocation;
   bool _isLocating = false;
 
+  // Saved searches (see stuff/saved_search_store.dart). Loaded lazily for the
+  // signed-in user; null until the first read resolves so the menu does not
+  // flash an empty list before prefs are available.
+  SavedSearchStore? _searchStore;
+  List<SavedSearch> _savedSearches = const [];
+
   @override
   void initState() {
     super.initState();
     _reload();
     searchController.addListener(filterImages);
     _listenToUnreadCounts();
+    _loadSavedSearches();
+  }
+
+  /// Loads this user's saved searches. Prefs are keyed by UID, so signing in
+  /// as someone else never surfaces the previous account's searches.
+  Future<void> _loadSavedSearches() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (!mounted) return;
+      final store = SavedSearchStore(prefs, uid: user.uid);
+      setState(() {
+        _searchStore = store;
+        _savedSearches = store.load();
+      });
+    } catch (e) {
+      // Saved searches are a convenience; a prefs failure must not block the
+      // feed from loading.
+      debugPrint('Kay�tl� aramalar y�klenemedi: $e');
+    }
   }
 
   Future<void> _reload() async {
@@ -82,6 +111,73 @@ class _HomePageState extends State<HomePage> {
     }
     _subscriptions.clear();
     super.dispose();
+  }
+
+  /// The current filter as a [SavedSearch], used for both saving and
+  /// de-duplication. Reused by the menu so what is saved always matches what
+  /// is on screen.
+  SavedSearch get _currentSearch => SavedSearch(
+        query: searchController.text.trim(),
+        species: _selectedSpecies,
+        sortMode: _sortMode.name,
+      );
+
+  /// Whether the on-screen filter differs from an empty search, i.e. whether
+  /// the "save" action is meaningful right now.
+  bool get _hasActiveFilter =>
+      searchController.text.trim().isNotEmpty || _selectedSpecies != null;
+
+  /// Applies [search] to the live filter state and re-runs filtering.
+  void _applySavedSearch(SavedSearch search) {
+    setState(() {
+      searchController.text = search.query;
+      _selectedSpecies = search.species;
+      _sortMode = FeedSortMode.values.firstWhere(
+        (m) => m.name == search.sortMode,
+        orElse: () => FeedSortMode.newest,
+      );
+    });
+    if (_sortMode == FeedSortMode.nearest) {
+      _ensureUserLocation();
+    } else {
+      filterImages();
+    }
+  }
+
+  /// Persists the current filter as a saved search and refreshes the menu.
+  Future<void> _saveCurrentSearch() async {
+    final store = _searchStore;
+    if (store == null || !_hasActiveFilter) return;
+    final updated = store.add(_currentSearch);
+    setState(() => _savedSearches = updated);
+    _showSnack('Arama kaydedildi.');
+  }
+
+  /// Removes [search] from the saved list.
+  Future<void> _deleteSavedSearch(SavedSearch search) async {
+    final store = _searchStore;
+    if (store == null) return;
+    final updated = store.remove(search);
+    setState(() => _savedSearches = updated);
+    _showSnack('Kay�tl� arama silindi.');
+  }
+
+  /// Applies the active filter and clears the search box, returning the feed
+  /// to its default (all species, newest first) state.
+  void _clearFilters() {
+    setState(() {
+      searchController.clear();
+      _selectedSpecies = null;
+      _sortMode = FeedSortMode.newest;
+    });
+    filterImages();
+  }
+
+  void _showSnack(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
   }
 
   void filterImages() {
@@ -321,13 +417,22 @@ class _HomePageState extends State<HomePage> {
                     contentPadding: const EdgeInsets.symmetric(vertical: 10),
                     prefixIcon:
                         Icon(Icons.search, color: Theme.of(context).colorScheme.primary),
-                    suffixIcon: searchController.text.isEmpty
-                        ? null
-                        : IconButton(
+                    suffixIcon: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (searchController.text.isNotEmpty)
+                          IconButton(
                             icon: const Icon(Icons.clear),
                             tooltip: 'Aramay� temizle',
                             onPressed: () => searchController.clear(),
                           ),
+                        IconButton(
+                          icon: const Icon(Icons.bookmark_border),
+                          tooltip: 'Kay�tl� aramalar',
+                          onPressed: _showSearchMenu,
+                        ),
+                      ],
+                    ),
                   ),
                 ),
                 const SizedBox(height: 6),
@@ -534,6 +639,112 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  /// Menu for the search field: save the current filter, jump to a saved one,
+  /// or clear everything. Rendered as the field's suffix action.
+  void _showSearchMenu() {
+    final scheme = Theme.of(context).colorScheme;
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: StatefulBuilder(
+          builder: (sheetContext, setSheetState) {
+            // Refresh the local copy after a mutation so the sheet updates
+            // without waiting on the parent's setState.
+            final searches = _savedSearches;
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 8, 4),
+                  child: Row(
+                    children: [
+                      Icon(Icons.bookmark, color: scheme.primary),
+                      const SizedBox(width: 8),
+                      const Expanded(
+                        child: Text(
+                          'Kay�tl� Aramalar',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      TextButton.icon(
+                        onPressed: _hasActiveFilter
+                            ? () async {
+                                await _saveCurrentSearch();
+                                setSheetState(() {});
+                              }
+                            : null,
+                        icon: const Icon(Icons.add),
+                        label: const Text('Kaydet'),
+                      ),
+                    ],
+                  ),
+                ),
+                if (searches.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                    child: Text(
+                      'Hen�z kay�tl� araman�z yok. Be�endi�iniz bir aramay� '
+                      'veya filtreyi a�a�daki "Kaydet" d��mesiyle saklayabilirsiniz.',
+                      style: TextStyle(color: scheme.onSurfaceVariant),
+                    ),
+                  )
+                else
+                  Flexible(
+                    child: ListView.builder(
+                      shrinkWrap: true,
+                      itemCount: searches.length,
+                      itemBuilder: (context, index) {
+                        final search = searches[index];
+                        return ListTile(
+                          leading: Icon(Icons.search, color: scheme.primary),
+                          title: Text(
+                            search.query.isEmpty
+                                ? (search.species ?? 'T�m�')
+                                : search.query,
+                          ),
+                          subtitle: Text(_describeSearch(search)),
+                          trailing: IconButton(
+                            icon: const Icon(Icons.delete_outline),
+                            tooltip: 'Sil',
+                            onPressed: () async {
+                              await _deleteSavedSearch(search);
+                              setSheetState(() {});
+                            },
+                          ),
+                          onTap: () {
+                            Navigator.of(sheetContext).pop();
+                            _applySavedSearch(search);
+                          },
+                        );
+                      },
+                    ),
+                  ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  /// Human-readable summary of a saved search's species + sort.
+  String _describeSearch(SavedSearch search) {
+    final parts = <String>[
+      if (search.species != null) search.species! else 'T�m t�rler',
+      switch (search.sortMode) {
+        'oldest' => 'en eski',
+        'nearest' => 'en yak�n',
+        _ => 'en yeni',
+      },
+    ];
+    return parts.join('  •  ');
+  }
+
   Widget _buildBody(BuildContext context) {
     if (_isLoading) {
       return _buildSkeleton(context);
@@ -558,6 +769,9 @@ class _HomePageState extends State<HomePage> {
         message: isSearching
             ? 'Seçili filtrelerle eşleşen bir pet bulunamadı. Aramayı veya tür seçimini değiştirmeyi deneyin.'
             : 'İlk pet ilanını ekleyen siz olun! Sağ üstteki menüden pet ekleyebilirsiniz.',
+        // Offer a one-tap reset whenever a filter is actually narrowing the
+        // list; otherwise the button would be a no-op and just add noise.
+        onSecondary: isSearching ? _clearFilters : null,
       );
     }
     return SingleChildScrollView(
@@ -637,6 +851,8 @@ class _HomePageState extends State<HomePage> {
     required String message,
     String? buttonLabel,
     VoidCallback? onRetry,
+    String? secondaryLabel,
+    VoidCallback? onSecondary,
   }) {
     final scheme = Theme.of(context).colorScheme;
     return Center(
@@ -675,6 +891,14 @@ class _HomePageState extends State<HomePage> {
                 onPressed: onRetry,
                 icon: const Icon(Icons.refresh),
                 label: Text(buttonLabel ?? 'Tekrar Dene'),
+              ),
+            ],
+            if (onSecondary != null) ...[
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: onSecondary,
+                icon: const Icon(Icons.filter_alt_off),
+                label: Text(secondaryLabel ?? 'Filtreleri temizle'),
               ),
             ],
           ],
