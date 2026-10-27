@@ -1,0 +1,51 @@
+rules_version = '2';
+
+// Storage paths below mirror what lib/ actually uploads:
+//   account_page.dart                  -> profile_images/{uid}/avatar.jpg
+//   message_page.dart                  -> chat_images/{chatId}/{timestamp}.jpg
+//   add_pet_page.dart                  -> pets_images/{serial}.jpg
+//   update_pet_information.dart        -> pets_images/{timestamp}.png
+//
+// The previous revision only matched /users/**, /shops/** and /products/**,
+// none of which the client ever writes, so every real upload was rejected by
+// the default deny rule. Shops/products rules are gone with them.
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // Size and type limits shared by every upload below.
+    function validImageUpload() {
+      return request.resource.size < 10 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+    }
+
+    // Profile photo: only the owner may write their own folder; any signed-in
+    // user may read it (chat list and pet detail render these avatars).
+    match /profile_images/{userId}/{fileName} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null
+        && request.auth.uid == userId
+        && validImageUpload();
+    }
+
+    // Chat photos: conversation ids are "<uidA>_<uidB>" (sorted, see
+    // message_page.dart _generateChatId), so a participant check reduces to
+    // membership in the split id. Participants only — nobody else may read
+    // private conversation media.
+    match /chat_images/{conversationId}/{fileName} {
+      allow read, write: if request.auth != null
+        && request.auth.uid in conversationId.split('_')
+        && validImageUpload();
+    }
+
+    // Pet listing photos: the pets collection itself is readable by any
+    // signed-in user, so its images are too. Writes stay authenticated to
+    // keep anonymous buckets from being filled.
+    match /pets_images/{fileName} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && validImageUpload();
+    }
+
+    // Anything else is denied.
+  }
+}

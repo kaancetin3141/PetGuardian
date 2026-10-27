@@ -1,0 +1,293 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ------------------------------------------------------------------
+    // Helpers
+    // ------------------------------------------------------------------
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // `request.auth.token.admin` raises an evaluation error when the custom claim
+    // is absent, so each field is probed with `in` first.
+    function isAdmin() {
+      return isSignedIn()
+        && (('admin' in request.auth.token && request.auth.token.admin == true)
+            || ('role' in request.auth.token && request.auth.token.role == 'admin'));
+    }
+
+// ------------------------------------------------------------------
+    // users/{uid}
+    //
+    // Profiles are readable by any signed-in user because the chat list and
+    // message screens resolve recipient names and avatars from here.
+    //
+    // Passwords live only in Firebase Authentication. Older documents may still
+    // carry a `passwordHash` field copied from the previous hand-rolled login;
+    // new writes are forbidden from adding or changing it.
+    // ------------------------------------------------------------------
+    match /users/{userId} {
+      // A LIST over the whole collection is deliberately not allowed: the
+      // client only ever does get() by id, and an open list would let any
+      // account harvest every email, phone number and IP in one query.
+      allow get: if isSignedIn();
+
+      // signup_page.dart writes role: 'customer', so that value is allowed;
+      // anything else, and the admin flag, is not.
+      allow create: if isSignedIn()
+        && request.auth.uid == userId
+        && !('admin' in request.resource.data)
+        && !('passwordHash' in request.resource.data)
+        && !('fcmToken' in request.resource.data)
+        && !('ip' in request.resource.data)
+        && (!('role' in request.resource.data) || request.resource.data.role == 'customer');
+
+      allow update: if isSignedIn()
+        && resource != null
+        && (
+             // Only an admin may change a privilege field, and nobody may
+             // rewrite a stored password hash, IP or FCM token from the
+             // client.
+             request.resource.data.diff(resource.data).affectedKeys()
+               .hasAny(['role', 'admin', 'passwordHash', 'fcmToken', 'ip'])
+               ? isAdmin()
+               : true
+           )
+        && (request.auth.uid == userId || isAdmin());
+
+      allow delete: if isAdmin();
+
+      // favorites is a subcollection of the user (see pet_detail_page.dart).
+      match /favorites/{petId} {
+        allow read: if isSignedIn() && request.auth.uid == userId;
+        allow create, delete: if isSignedIn() && request.auth.uid == userId;
+        allow update: if false;
+      }
+
+      // Owner-only device metadata (FCM push token). Nothing else may read
+      // or write here: a leaked token lets a third party address push
+      // notifications to this user's device.
+      match /private/{docId} {
+        allow read, write: if isSignedIn() && request.auth.uid == userId;
+      }
+    }
+
+    // ------------------------------------------------------------------
+    // pets/{petId}
+    //
+    // Field names match what add_pet_page.dart / update_pet_information.dart
+    // actually write: the owner field is `userUID` and the name field is
+    // `title`. An earlier version of these rules required `ownerUID`/`name`,
+    // which no client has ever written, so every pet write was rejected.
+    // ------------------------------------------------------------------
+    match /pets/{petId} {
+      function ownerOf(data) {
+        return data.userUID;
+      }
+
+      function validPet(data) {
+        return ownerOf(data) is string
+          && ownerOf(data).size() > 0
+          && data.title is string
+          && data.title.size() > 0
+          && data.title.size() <= 200;
+      }
+
+      // Signed-in users can browse pets (shelter/adoption lists). Kept behind auth
+      // because these documents carry the owner's email, phone and IP address.
+      allow read: if isSignedIn();
+
+      allow create: if isSignedIn()
+        && validPet(request.resource.data)
+        && ownerOf(request.resource.data) == request.auth.uid;
+
+// The owner cannot reassign a pet to somebody else.
+      allow update: if isSignedIn()
+        && resource != null
+        && validPet(request.resource.data)
+        && (ownerOf(resource.data) == request.auth.uid || isAdmin())
+        && (ownerOf(request.resource.data) == ownerOf(resource.data) || isAdmin());
+
+      allow delete: if isSignedIn()
+        && (ownerOf(resource.data) == request.auth.uid || isAdmin());
+    }
+
+    // ------------------------------------------------------------------
+    // deleted_pets/{petId}
+    //
+    // Soft-delete archive used by delete_pet_page.dart and restored by
+    // return_pet_page.dart. Previously this collection had no rules at all, so
+    // both delete and restore failed with a permission error.
+    // ------------------------------------------------------------------
+    match /deleted_pets/{petId} {
+      function validArchived(data) {
+        return data.userUID is string
+          && data.userUID.size() > 0
+          && data.title is string
+          && data.title.size() > 0;
+      }
+
+      // These documents carry the owner's email and phone number, and the app
+      // only ever lists them with `userUID == auth.uid`, so they are not public.
+      allow read: if isSignedIn()
+        && (resource.data.userUID == request.auth.uid || isAdmin());
+
+      allow create: if isSignedIn()
+        && validArchived(request.resource.data)
+        && request.resource.data.userUID == request.auth.uid;
+
+allow update: if isSignedIn()
+        && resource != null
+        && validArchived(request.resource.data)
+        && (resource.data.userUID == request.auth.uid || isAdmin())
+        && (request.resource.data.userUID == resource.data.userUID || isAdmin());
+
+      allow delete: if isSignedIn()
+        && (resource.data.userUID == request.auth.uid || isAdmin());
+    }
+
+    // ------------------------------------------------------------------
+    // notifications/{notificationId}
+    //
+    // Top-level collection queried with `userId == auth.uid`
+    // (notification_page.dart). Each user may only reach their own rows.
+    // ------------------------------------------------------------------
+    match /notifications/{notificationId} {
+      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+
+      allow create: if isSignedIn()
+        && request.resource.data.userId == request.auth.uid;
+
+      // Only the read state may change; body and owner stay put.
+allow update: if isSignedIn()
+        && resource != null
+        && resource.data.userId == request.auth.uid
+        && request.resource.data.userId == resource.data.userId
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['isRead', 'readAt']);
+
+      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+    }
+
+// ------------------------------------------------------------------
+    // orders/{orderId}
+    //
+    // Created by cart_page.dart when the customer confirms a purchase. There
+    // is no payment provider wired up yet, so an order stays in
+    // 'pending_payment' until an operator fulfils it.
+    // ------------------------------------------------------------------
+    match /orders/{orderId} {
+      function validOrder(data) {
+        return data.userUID is string
+          && data.userUID.size() > 0
+          && data.items is list
+          && data.items.size() > 0
+          && data.totalCents is int
+          && data.totalCents >= 0;
+      }
+
+      // A signed-in customer reads their own orders; listing everyone else is
+      // rejected, which the chat/product screens rely on.
+      allow get, list: if isSignedIn() && resource.data.userUID == request.auth.uid;
+
+      allow create: if isSignedIn()
+        && validOrder(request.resource.data)
+        && request.resource.data.userUID == request.auth.uid;
+
+      // Fulfilment staff only. The customer must not be able to mark their
+      // own order as paid or delivered: the previous rule also allowed the
+      // owner for the status fields, which made self-escalation possible.
+      allow update: if isSignedIn()
+        && resource != null
+        && (
+             request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly(['status', 'updatedAt', 'cancelledReason'])
+               ? isAdmin()
+               : false
+           );
+
+      // An order is a record; clients never delete it.
+      allow delete: if false;
+    }
+
+    // ------------------------------------------------------------------
+    // messages/{conversationId} + messages/{conversationId}/chats/{messageId}
+    //
+    // Conversation metadata lives on the parent; individual messages live in
+    // the `chats` subcollection. Every message document also carries its own
+    // `participants` array (message_page.dart), so read checks do not need an
+    // extra get() on the parent.
+    // ------------------------------------------------------------------
+match /messages/{conversationId} {
+      // Authorizing reads of the conversation document itself uses `resource`,
+      // which Firestore binds per candidate document, so LIST queries keep
+      // working. The chat list and the home-screen unread badge both run
+      // `where('participants', arrayContains: uid)` over this collection, and a
+      // `get()` on the wildcard path is not evaluable for a query.
+      function isParticipantOf(data) {
+        return isSignedIn()
+          && data.participants is list
+          && request.auth.uid in data.participants;
+      }
+
+      allow read: if isParticipantOf(resource.data);
+
+      // For the `chats` subcollection the parent ID comes from the rule path,
+      // so the parent has to be fetched to learn who the participants are.
+      function conversation() {
+        return get(/databases/$(database)/documents/messages/$(conversationId));
+      }
+
+      function isParticipant() {
+        return isSignedIn()
+          && conversation().data.participants is list
+          && request.auth.uid in conversation().data.participants;
+      }
+
+      allow create: if isSignedIn()
+        && request.resource.data.participants is list
+        && request.resource.data.participants.size() == 2
+        && request.auth.uid in request.resource.data.participants
+        && request.resource.data.lastMessage is string;
+
+allow update: if isParticipantOf(resource.data)
+        && request.resource.data.participants == resource.data.participants;
+
+      allow delete: if false;
+
+      match /chats/{messageId} {
+        allow read: if isParticipant();
+
+        // Creating a message requires being a participant of the PARENT
+        // conversation, with an identical participants array. Without this
+        // check any signed-in user could inject messages into any
+        // conversation path (spoofing a chat between two other people),
+        // because the client's stream reads every doc in the subcollection.
+        // The parent must exist first: message_page.dart creates the
+        // conversation document before the first message is sent.
+        allow create: if isParticipant()
+          && request.resource.data.participants == conversation().data.participants
+          && request.resource.data.senderUID == request.auth.uid
+          && request.resource.data.recipientUID != request.auth.uid
+          && request.resource.data.message is string
+          && request.resource.data.message.size() > 0
+          && request.resource.data.timestamp is timestamp;
+
+        // Read receipts only. `_markMessagesAsRead()` writes {isRead, readAt};
+        // the previous rule looked for {delivered, read} so marking a message
+        // as read was rejected and unread badges never cleared. Restricting
+        // the diff keeps the message body immutable to clients.
+        allow update: if resource != null
+          && isParticipant()
+          && request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly(['isRead', 'readAt']);
+
+        allow delete: if false;
+      }
+    }
+
+    // Anything not matched above is denied.
+  }
+}

@@ -1,0 +1,55 @@
+name: petguardian
+description: A new Flutter project.
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.8.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  firebase_core: ^4.15.0
+  firebase_auth: ^6.7.0
+  shared_preferences: ^2.5.5
+  cloud_firestore: ^6.10.0
+  http: ^1.6.0
+  image_picker: ^1.2.3
+  firebase_storage: ^13.6.0
+  url_launcher: ^6.3.3
+  firebase_database: ^12.6.0
+  firebase_messaging: ^16.7.0
+  flutter_local_notifications: ^19.4.0
+  path_provider: ^2.1.6
+  geolocator: ^14.1.1
+  flutter_map: ^8.3.2
+  permission_handler: ^13.0.1
+  latlong2: ^0.10.1
+  geocoding: ^5.0.0
+  intl: 0.20.2
+  bcrypt: ^1.1.3
+  cupertino_icons: ^2.0.0
+
+dependency_overrides:
+  # permission_handler 13.0.1 resolves to android ^14.0.0, and every 14.x of
+  # permission_handler_android sets compileSdk 37, which Android Gradle Plugin
+  # 9.0.1 (the version the Flutter template ships) cannot target. 14.0.0 also
+  # requests 37; 13.0.1 uses compileSdk 35 and builds against 36.
+  permission_handler_android: 13.0.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  fake_cloud_firestore: ^4.3.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - images/
+    - images/pets_images/
+    - images/shop_images/
+    - images/animal_shelter/

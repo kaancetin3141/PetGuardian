@@ -1,0 +1,307 @@
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:petguardian/pages/home_page.dart';
+
+import './account_page.dart';
+import './cart_page.dart';
+import './rent_page.dart';
+
+class ShopPage extends StatefulWidget {
+  const ShopPage({super.key});
+
+  @override
+  State<ShopPage> createState() => _ShopPageState();
+}
+
+class _ShopPageState extends State<ShopPage> {
+  List<ProductInfo> productList = [
+    ProductInfo('images/shop_images/product1.jpg', 'PetGuardian Tasma', 99.99),
+    ProductInfo(
+        'images/shop_images/product2.jpg', 'Perfect Köpek maması', 190.99),
+    ProductInfo(
+        'images/shop_images/product3.jpg', 'Reflex Köpek Maması', 125.99),
+    ProductInfo('images/shop_images/product4.jpg', 'Pedigre', 70.99),
+    ProductInfo('images/shop_images/product5.jpg', 'Pro Plan', 105.99),
+    ProductInfo('images/shop_images/product6.jpg', 'Croque', 299.99),
+    ProductInfo(
+        'images/shop_images/product7.jpg', 'Hills Köpek Maması', 109.99),
+    ProductInfo(
+        'images/shop_images/product8.jpg', 'Goody Köpek Maması', 210.99),
+    ProductInfo('images/shop_images/product9.jpg', 'Reflex Set', 300.99),
+    ProductInfo('images/shop_images/product10.jpg', 'Whiskas', 280.99),
+    ProductInfo(
+        'images/shop_images/product11.jpg', 'Hills Sciene Plan', 130.99),
+    ProductInfo('images/shop_images/product12.jpg', 'Mera Kedi Maması', 159.99),
+  ];
+
+  List<ProductInfo> cartItems = [];
+  TextEditingController searchController = TextEditingController();
+  List<ProductInfo> filteredList = [];
+
+  @override
+  void initState() {
+    super.initState();
+    filteredList = productList;
+  }
+
+  @override
+  void dispose() {
+    searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            SizedBox(width: 50),
+            Icon(
+              Icons.shopping_cart,
+              color: Theme.of(context).colorScheme.primary,
+            ),
+            SizedBox(width: 8),
+            Text(
+              'Market',
+              style: TextStyle(color: Theme.of(context).colorScheme.primary),
+            ),
+            SizedBox(width: 8),
+            Icon(
+              Icons.shopping_cart,
+              color: Theme.of(context).colorScheme.primary,
+            ),
+          ],
+        ),
+        centerTitle: true,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        automaticallyImplyLeading: false, // Geri Dön butonunu iptal eder
+
+        actions: [
+          IconButton(
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (context) => CartPage(productList: cartItems)),
+              );
+            },
+            icon: Icon(
+              Icons.shopping_bag,
+              color: Theme.of(context).colorScheme.primary,
+            ),
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: TextField(
+              controller: searchController,
+              onChanged: (value) {
+                setState(() {
+                  filteredList = productList
+                      .where((product) => product.title
+                          .toLowerCase()
+                          .contains(value.toLowerCase()))
+                      .toList();
+                });
+              },
+              decoration: InputDecoration(
+                prefixIcon: const Icon(Icons.search),
+                hintText: 'Ürün Ara',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(30),
+                ),
+              ),
+            ),
+          ),
+          Expanded(
+            child: SingleChildScrollView(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  children: _buildProductRows(context),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+      bottomNavigationBar: BottomAppBar(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 1, vertical: 10),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              _buildBottomButton(
+                context,
+                'Ana Sayfa',
+                Icons.home,
+                Theme.of(context).colorScheme.primary,
+                () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const HomePage()),
+                  );
+                },
+              ),
+              ElevatedButton.icon(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const RentPage()),
+                  );
+                },
+                style: ElevatedButton.styleFrom(
+                  foregroundColor: Colors.white,
+                  backgroundColor: Theme.of(context).colorScheme.primary,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8.0),
+                  ),
+                  padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                ),
+                icon: const Icon(Icons.local_hospital),
+                label: Text('Bakıcı Kirala', style: TextStyle(fontSize: 16)),
+              ),
+              _buildBottomButton(
+                context,
+                'Hesap',
+                Icons.person,
+                Theme.of(context).colorScheme.primary,
+                () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const AccountPage()),
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  List<Widget> _buildProductRows(BuildContext context) {
+    List<Widget> rows = [];
+    for (int i = 0; i < filteredList.length; i += 3) {
+      if (i + 3 <= filteredList.length) {
+        rows.add(
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              _buildProductCard(context, filteredList[i]),
+              _buildProductCard(context, filteredList[i + 1]),
+              _buildProductCard(context, filteredList[i + 2]),
+            ],
+          ),
+        );
+      } else {
+        List<Widget> rowChildren = [];
+        for (int j = i; j < filteredList.length; j++) {
+          rowChildren.add(_buildProductCard(context, filteredList[j]));
+        }
+        rows.add(
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: rowChildren,
+          ),
+        );
+      }
+      rows.add(const SizedBox(height: 16));
+    }
+    return rows;
+  }
+
+  Widget _buildProductCard(BuildContext context, ProductInfo productInfo) {
+    return Expanded(
+      child: Padding(
+        padding: const EdgeInsets.all(8),
+        child: Column(
+          children: [
+            GestureDetector(
+              onTap: () {
+                // Ürüne tıklama işlemleri
+                debugPrint('Ürüne tıklandı: ${productInfo.title}');
+              },
+              child: Container(
+                width: double.infinity,
+                height: 120,
+                decoration: BoxDecoration(
+                  image: DecorationImage(
+                    image: AssetImage(productInfo.imagePath),
+                    fit: BoxFit.cover,
+                  ),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              productInfo.title,
+              style: const TextStyle(fontSize: 16, color: Colors.black),
+            ),
+            const SizedBox(height: 8),
+            ElevatedButton(
+              onPressed: () {
+                _addToCart(productInfo); // Ürünü sepete ekle
+              },
+              child: Text(
+                  'Sepete Ekle - ${productInfo.price.toStringAsFixed(2)} TL'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _addToCart(ProductInfo productInfo) {
+    HapticFeedback.lightImpact();
+    setState(() {
+      cartItems.add(productInfo); // Ürünü sepete ekle
+    });
+    ScaffoldMessenger.of(context)
+      ..clearSnackBars()
+      ..showSnackBar(
+        SnackBar(
+          content: Text('${productInfo.title} sepete eklendi'),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+  }
+
+  Widget _buildBottomButton(
+    BuildContext context,
+    String label,
+    IconData icon,
+    Color color,
+    VoidCallback onPressed,
+  ) {
+    return ElevatedButton(
+      onPressed: onPressed,
+      style: ElevatedButton.styleFrom(
+        foregroundColor: Colors.white,
+        backgroundColor: color,
+      ),
+      child: Row(
+        children: [
+          Icon(icon),
+          const SizedBox(width: 8),
+          Text(label),
+        ],
+      ),
+    );
+  }
+}
+
+class ProductInfo {
+  final String imagePath;
+  final String title;
+  final double price;
+
+  ProductInfo(this.imagePath, this.title, this.price);
+}
