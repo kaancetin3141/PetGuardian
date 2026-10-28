@@ -3,7 +3,7 @@
     "short_name": "PetGuardian",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#FFFFFF",
+    "background_color": "#E91E63",
     "theme_color": "#E91E63",
     "description": "Hayvan sahiplendirme, barınak ve pet bakım hizmetleri platformu.",
     "orientation": "portrait-primary",

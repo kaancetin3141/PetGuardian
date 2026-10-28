@@ -430,7 +430,20 @@ Future<bool> toggleFavoriteStatus(
               ),
               actions: [
                 IconButton(
-                  icon: Icon(isFavorite ? Icons.favorite : Icons.favorite_border, color: Theme.of(context).colorScheme.primary,),
+                  icon: AnimatedScale(
+                    // Little "pop" when the heart fills; settles back when it
+                    // empties. Keyed by state so the scale re-runs each toggle.
+                    key: ValueKey<bool>(isFavorite),
+                    scale: isFavorite ? 1.2 : 1.0,
+                    duration: const Duration(milliseconds: 220),
+                    curve: isFavorite ? Curves.easeOutBack : Curves.easeOut,
+                    child: Icon(
+                      isFavorite
+                          ? Icons.favorite
+                          : Icons.favorite_border,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                  ),
                   onPressed: () async {
                     final newValue = !isFavorite;
                     setState(() {
@@ -482,11 +495,16 @@ Future<bool> toggleFavoriteStatus(
                         borderRadius: BorderRadius.circular(16),
                         color: Colors.white,
                       ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(16),
-                        child: AppNetworkImage(
-                          url: imagePath,
-                          fit: BoxFit.fitHeight,
+                      child: Hero(
+                        // Same tag as the feed thumbnail: the photo grows
+                        // out of the tapped card instead of popping in.
+                        tag: 'pet-image-${widget.petId}',
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(16),
+                          child: AppNetworkImage(
+                            url: imagePath,
+                            fit: BoxFit.fitHeight,
+                          ),
                         ),
                       ),
                     ),

@@ -26,7 +26,7 @@ class AppNetworkImage extends StatelessWidget {
     final hasUrl = url.isNotEmpty && (url.startsWith('http') || url.startsWith('assets/'));
 
     if (!hasUrl) {
-      return _placeholder();
+      return _placeholder(context);
     }
 
     return Image.network(
@@ -34,19 +34,21 @@ class AppNetworkImage extends StatelessWidget {
       fit: fit,
       height: height,
       width: width,
-      errorBuilder: (context, error, stackTrace) => _placeholder(),
+      errorBuilder: (context, error, stackTrace) => _placeholder(context),
       loadingBuilder: (context, child, progress) {
         if (progress == null) return child;
-        return _placeholder(showSpinner: true);
+        return _placeholder(context, showSpinner: true);
       },
     );
   }
 
-  Widget _placeholder({bool showSpinner = false}) {
+  Widget _placeholder(BuildContext context, {bool showSpinner = false}) {
+    // Theme-aware: adapts to dark mode instead of hardcoding light greys.
+    final colors = Theme.of(context).colorScheme;
     return Container(
       height: height,
       width: width,
-      color: Colors.grey[200],
+      color: colors.surfaceContainerHighest,
       alignment: Alignment.center,
       child: showSpinner
           ? const SizedBox(
@@ -54,7 +56,7 @@ class AppNetworkImage extends StatelessWidget {
               width: 20,
               child: CircularProgressIndicator(strokeWidth: 2),
             )
-          : Icon(placeholderIcon, color: Colors.grey),
+          : Icon(placeholderIcon, color: colors.onSurfaceVariant),
     );
   }
 }

@@ -39,6 +39,11 @@ class _HomePageState extends State<HomePage> {
   FeedLocation? _userLocation;
   bool _isLocating = false;
 
+  // Pet IDs whose entrance animation has already played. Re-running the
+  // filter rebuilds the grid, and remounting a card must not replay its
+  // slide-in or the feed would "cascade" on every keystroke.
+  final Set<String> _animatedIn = {};
+
   // Saved searches (see stuff/saved_search_store.dart). Loaded lazily for the
   // signed-in user; null until the first read resolves so the menu does not
   // flash an empty list before prefs are available.
@@ -322,27 +327,7 @@ class _HomePageState extends State<HomePage> {
                     : 'Bildirimler',
               ),
               if (_unreadNotificationsCount > 0)
-                Positioned(
-                  right: 8,
-                  top: 8,
-                  child: Container(
-                    padding: const EdgeInsets.all(2),
-                    decoration: const BoxDecoration(
-                      color: Colors.red,
-                      shape: BoxShape.circle,
-                    ),
-                    constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
-                    child: Text(
-                      _unreadNotificationsCount > 99 ? '99+' : _unreadNotificationsCount.toString(),
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-                ),
+                _animatedCountBadge(_unreadNotificationsCount),
             ],
           ),
           // Messages with badge
@@ -366,27 +351,7 @@ class _HomePageState extends State<HomePage> {
                     : 'Mesajlar',
               ),
               if (_unreadMessagesCount > 0)
-                Positioned(
-                  right: 8,
-                  top: 8,
-                  child: Container(
-                    padding: const EdgeInsets.all(2),
-                    decoration: const BoxDecoration(
-                      color: Colors.red,
-                      shape: BoxShape.circle,
-                    ),
-                    constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
-                    child: Text(
-                      _unreadMessagesCount > 99 ? '99+' : _unreadMessagesCount.toString(),
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-                ),
+                _animatedCountBadge(_unreadMessagesCount),
             ],
           ),
         ],
@@ -557,27 +522,7 @@ class _HomePageState extends State<HomePage> {
                     },
                   ),
                   if (_unreadMessagesCount > 0)
-                    Positioned(
-                      right: -4,
-                      top: -4,
-                      child: Container(
-                        padding: const EdgeInsets.all(2),
-                        decoration: const BoxDecoration(
-                          color: Colors.red,
-                          shape: BoxShape.circle,
-                        ),
-                        constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
-                        child: Text(
-                          _unreadMessagesCount > 99 ? '99+' : _unreadMessagesCount.toString(),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                    ),
+                    _animatedCountBadge(_unreadMessagesCount, right: -4, top: -4),
                 ],
               ),
               // Notifications tab with badge
@@ -597,27 +542,7 @@ class _HomePageState extends State<HomePage> {
                     },
                   ),
                   if (_unreadNotificationsCount > 0)
-                    Positioned(
-                      right: -4,
-                      top: -4,
-                      child: Container(
-                        padding: const EdgeInsets.all(2),
-                        decoration: const BoxDecoration(
-                          color: Colors.red,
-                          shape: BoxShape.circle,
-                        ),
-                        constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
-                        child: Text(
-                          _unreadNotificationsCount > 99 ? '99+' : _unreadNotificationsCount.toString(),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                    ),
+                    _animatedCountBadge(_unreadNotificationsCount, right: -4, top: -4),
                 ],
               ),
               _buildBottomButton(
@@ -746,11 +671,13 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildBody(BuildContext context) {
+    // AnimatedSwitcher cross-fades between the four body states (loading,
+    // error, empty, grid) so a refresh or filter change does not hard-swap.
+    Widget content;
     if (_isLoading) {
-      return _buildSkeleton(context);
-    }
-    if (_loadFailed) {
-      return _buildStatusView(
+      content = _buildSkeleton(context);
+    } else if (_loadFailed) {
+      content = _buildStatusView(
         context,
         icon: Icons.cloud_off,
         title: 'Bağlantı sorunu',
@@ -758,11 +685,10 @@ class _HomePageState extends State<HomePage> {
         buttonLabel: 'Tekrar Dene',
         onRetry: _reload,
       );
-    }
-    if (filteredList.isEmpty) {
+    } else if (filteredList.isEmpty) {
       final isSearching =
           searchController.text.isNotEmpty || _selectedSpecies != null;
-      return _buildStatusView(
+      content = _buildStatusView(
         context,
         icon: isSearching ? Icons.search_off : Icons.pets,
         title: isSearching ? 'Sonuç bulunamadı' : 'Henüz ilan yok',
@@ -773,11 +699,68 @@ class _HomePageState extends State<HomePage> {
         // list; otherwise the button would be a no-op and just add noise.
         onSecondary: isSearching ? _clearFilters : null,
       );
+    } else {
+      content = RefreshIndicator(
+        onRefresh: _reload,
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(16),
+          child: Column(children: _buildImageRows(context)),
+        ),
+      );
     }
-    return SingleChildScrollView(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(children: _buildImageRows(context)),
+
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 240),
+      switchInCurve: Curves.easeOut,
+      switchOutCurve: Curves.easeIn,
+      // Pure cross-fade: the four states have very different sizes, so a
+      // slide would make the layout jump more than it already does.
+      transitionBuilder: (child, animation) =>
+          FadeTransition(opacity: animation, child: child),
+      child: KeyedSubtree(
+        key: ValueKey<String>(
+          'feed-${_isLoading ? 'loading' : _loadFailed ? 'error' : filteredList.isEmpty ? 'empty' : 'grid'}',
+        ),
+        child: content,
+      ),
+    );
+  }
+
+  /// Pulsing count badge used for unread messages / notifications.
+  ///
+  /// Replaces four duplicated Containers; the AnimatedSwitcher scales the
+  /// number in whenever the count changes instead of hard-swapping the text.
+  Widget _animatedCountBadge(int count, {double right = 8, double top = 8}) {
+    return Positioned(
+      right: right,
+      top: top,
+      child: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 180),
+        switchInCurve: Curves.easeOutBack,
+        switchOutCurve: Curves.easeIn,
+        transitionBuilder: (child, animation) => ScaleTransition(
+          scale: animation,
+          child: FadeTransition(opacity: animation, child: child),
+        ),
+        child: Container(
+          key: ValueKey<int>(count),
+          padding: const EdgeInsets.all(2),
+          decoration: const BoxDecoration(
+            color: Colors.red,
+            shape: BoxShape.circle,
+          ),
+          constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+          child: Text(
+            count > 99 ? '99+' : count.toString(),
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 10,
+              fontWeight: FontWeight.bold,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ),
       ),
     );
   }
@@ -915,16 +898,16 @@ class _HomePageState extends State<HomePage> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              _buildImageBox(context, filteredList[i]),
-              _buildImageBox(context, filteredList[i + 1]),
-              _buildImageBox(context, filteredList[i + 2]),
+              _buildImageBox(context, filteredList[i], i),
+              _buildImageBox(context, filteredList[i + 1], i + 1),
+              _buildImageBox(context, filteredList[i + 2], i + 2),
             ],
           ),
         );
       } else {
         List<Widget> rowChildren = [];
         for (int j = i; j < filteredList.length; j++) {
-          rowChildren.add(_buildImageBox(context, filteredList[j]));
+          rowChildren.add(_buildImageBox(context, filteredList[j], j));
         }
         rows.add(
           Row(
@@ -938,74 +921,86 @@ class _HomePageState extends State<HomePage> {
     return rows;
   }
 
-  Widget _buildImageBox(BuildContext context, ImageInfo imageInfo) {
+  Widget _buildImageBox(BuildContext context, ImageInfo imageInfo, int index) {
+    Widget card = Column(
+      children: [
+        GestureDetector(
+          onTap: () {
+            _onInfoButtonPressed(context, imageInfo);
+          },
+          child: Hero(
+            // Shared flight between the feed thumbnail and the detail page's
+            // large photo; tag is the pet id, unique per listing.
+            tag: 'pet-image-${imageInfo.id}',
+            child: SizedBox(
+              width: double.infinity,
+              height: 120,
+              child: AppNetworkImage(
+                url: imageInfo.imagePath,
+                fit: BoxFit.fitHeight,
+              ),
+            ),
+          ),
+        ),
+        SizedBox(height: 8),
+        Text(
+          imageInfo.title,
+          style: const TextStyle(fontSize: 16, color: Colors.black),
+        ),
+        // Distance badge, shown only when both the viewer and the pet
+        // have coordinates. Keeps the card informative without cluttering
+        // the common case (no location yet).
+        if (_petDistanceKm(imageInfo) != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 2),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.primaryContainer,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.place,
+                    size: 12,
+                    color: Theme.of(context).colorScheme.onPrimaryContainer,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    _formatDistance(_petDistanceKm(imageInfo)!),
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Theme.of(context).colorScheme.onPrimaryContainer,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ElevatedButton(
+          style: ElevatedButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.primary),
+          onPressed: () {
+            _onInfoButtonPressed(context, imageInfo);
+          },
+          child: const Text(
+            'Bilgi Al',
+            style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+          ),
+        ),
+      ],
+    );
+
+    // First appearance only: cascade the cards in on load, but never replay
+    // the animation when a filter change remounts the same pet's card.
+    if (_animatedIn.add(imageInfo.id)) {
+      card = _StaggeredEntrance(index: index, child: card);
+    }
     return Expanded(
       child: Padding(
         padding: const EdgeInsets.all(8),
-        child: Column(
-          children: [
-            GestureDetector(
-              onTap: () {
-                _onInfoButtonPressed(context, imageInfo);
-              },
-              child: SizedBox(
-                width: double.infinity,
-                height: 120,
-                child: AppNetworkImage(
-                  url: imageInfo.imagePath,
-                  fit: BoxFit.fitHeight,
-                ),
-              ),
-            ),
-            SizedBox(height: 8),
-            Text(
-              imageInfo.title,
-              style: const TextStyle(fontSize: 16, color: Colors.black),
-            ),
-            // Distance badge, shown only when both the viewer and the pet
-            // have coordinates. Keeps the card informative without cluttering
-            // the common case (no location yet).
-            if (_petDistanceKm(imageInfo) != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 2),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.primaryContainer,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.place,
-                        size: 12,
-                        color: Theme.of(context).colorScheme.onPrimaryContainer,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        _formatDistance(_petDistanceKm(imageInfo)!),
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Theme.of(context).colorScheme.onPrimaryContainer,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.primary),
-              onPressed: () {
-                _onInfoButtonPressed(context, imageInfo);
-              },
-              child: const Text(
-                'Bilgi Al',
-                style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
-              ),
-            ),
-          ],
-        ),
+        child: card,
       ),
     );
   }
@@ -1046,8 +1041,66 @@ class _HomePageState extends State<HomePage> {
   }
 }
 
-class ImageInfo implements FeedPetInfo {
+/// Fades and slides a feed card in, staggered by [index] so the grid
+/// cascades on first load instead of popping in as one block.
+class _StaggeredEntrance extends StatefulWidget {
+  const _StaggeredEntrance({required this.index, required this.child});
+
+  /// Grid position; drives the per-card delay (capped so deep rows are not
+  /// left waiting for seconds).
+  final int index;
+  final Widget child;
+
   @override
+  State<_StaggeredEntrance> createState() => _StaggeredEntranceState();
+}
+
+class _StaggeredEntranceState extends State<_StaggeredEntrance>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final CurvedAnimation _curve;
+  late final Animation<Offset> _slide;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 380),
+    );
+    _curve = CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic);
+    _slide = Tween<Offset>(
+      begin: const Offset(0, 0.12),
+      end: Offset.zero,
+    ).animate(_curve);
+    // Cap the cascade at ~10 cards' worth of delay so rows far down the feed
+    // are not still invisible after the user has scrolled.
+    final delay = Duration(milliseconds: (widget.index * 55).clamp(0, 550));
+    Future<void>.delayed(delay, () {
+      if (mounted) _controller.forward();
+    });
+  }
+
+  @override
+  void dispose() {
+    _curve.dispose();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: _curve,
+      child: SlideTransition(
+        position: _slide,
+        child: widget.child,
+      ),
+    );
+  }
+}
+
+class ImageInfo implements FeedPetInfo {  @override
   final String id;
   final String imagePath;
   @override

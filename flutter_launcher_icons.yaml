@@ -1,0 +1,18 @@
+# Regenerate all launcher icons after editing assets/icon/*.png:
+#   powershell -File tool/gen-app-icon.ps1   (source art)
+#   flutter pub get && dart run flutter_launcher_icons
+flutter_launcher_icons:
+  image_path: 'assets/icon/app_icon.png'
+
+  android: true
+  adaptive_icon_background: '#E91E63'
+  adaptive_icon_foreground: 'assets/icon/app_icon_foreground.png'
+
+  ios: true
+  remove_alpha_ios: true
+
+  web:
+    generate: true
+    image_path: 'assets/icon/app_icon.png'
+    background_color: '#E91E63'
+    theme_color: '#E91E63'

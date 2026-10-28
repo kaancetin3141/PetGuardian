@@ -21,10 +21,10 @@ class _RentPageState extends State<RentPage> {
   bool isBilgiSelected = false;
   List<Map<String, dynamic>> barinakList = [
     {'Image': 'images/animal_shelter/yedikule.jpg','ad':'\nYedikule Hayvan Barınağı', 'yer': 'İstanbul'},
-    {'Image': 'images/animal_shelter/kadıköybarınak.jpg','ad':'\nKadıköy Belediyesi Geçici Hayvan Bakımevi', 'yer': 'İstanbul'},
-    {'Image': 'images/animal_shelter/kırık-kuyruk.jpg','ad':'\nKirikkuyruk.com: Sokak Hayvanları Portalı', 'yer': 'İstanbul'},
+    {'Image': 'images/animal_shelter/kadikoybarinak.jpg','ad':'\nKadıköy Belediyesi Geçici Hayvan Bakımevi', 'yer': 'İstanbul'},
+    {'Image': 'images/animal_shelter/kirik-kuyruk.jpg','ad':'\nKirikkuyruk.com: Sokak Hayvanları Portalı', 'yer': 'İstanbul'},
     {'Image': 'images/animal_shelter/haydos.png','ad':'\nHayvan Dostları Derneği', 'yer': 'Muğla'},
-    {'Image': 'images/animal_shelter/şişlirehabilitasyon.jpg','ad':'\nŞişli Belediyesi Hayvan Kısırlaştırma ve \nRehabilitasyon Merkezi ', 'yer': 'İstanbul'},
+    {'Image': 'images/animal_shelter/ciglirehabilitasyon.jpg','ad':'\nŞişli Belediyesi Hayvan Kısırlaştırma ve \nRehabilitasyon Merkezi ', 'yer': 'İstanbul'},
 
   ];
   List<Map<String, dynamic>> bireyselList = [
@@ -33,7 +33,7 @@ class _RentPageState extends State<RentPage> {
   ];
   List<Map<String, dynamic>> veterinerList = [
 
-    {'Image': 'images/animal_shelter/firuzköy.jpg','ad':' Firuzköy Veteriner Kliniği', 'yer': 'İstanbul/Avcılar','adres':'Hasan Önel Cad. No:57','num':'0212 690 30 84'},
+    {'Image': 'images/animal_shelter/firuzkoy.jpg','ad':' Firuzköy Veteriner Kliniği', 'yer': 'İstanbul/Avcılar','adres':'Hasan Önel Cad. No:57','num':'0212 690 30 84'},
     {'Image': 'images/animal_shelter/greenpet.jpg','ad':' Greenpet Veteriner Kliniği', 'yer': 'İstanbul/Bakırköy','adres':'Halkalı Cad. No:50 Yeşilköy','num':'0212 662 22 92'},
     {'Image': 'images/animal_shelter/vetplus.jpg','ad':' Vet Plus Veteriner Kliniği', 'yer': 'İstanbul/Beşiktaş','adres':'Barboros Bulvarı No: 24/1A','num':'0212 216 45 46'},
     {'Image': 'images/animal_shelter/patipata.jpg','ad':' Pati-Pata Veteriner Kliniği', 'yer': 'İstanbul/Beşiktaş','adres':'Etiler, Nispetiye Yıldız Çiçeği','num':'0212 257 00 41'},

@@ -44,11 +44,20 @@ dependency_overrides:
   # requests 37; 13.0.1 uses compileSdk 35 and builds against 36.
   permission_handler_android: 13.0.1
 
+  # flutter_launcher_icons -> image, but image 4.11.0 (2026-10) calls
+  # ZLibDecoder.decodeLazy(), which exists in NO published archive version
+  # (verified: 3.6.1 / 4.0.9 / 4.1.0 / 4.3.0 all lack it). Pin image to
+  # 4.2.0, the version flutter_launcher_icons 0.14.x was built and tested
+  # against; it uses archive ^3.4.0, which resolves cleanly. Drop this
+  # override when flutter_launcher_icons ships a compatible image range.
+  image: 4.2.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
   fake_cloud_firestore: ^4.3.0
+  flutter_launcher_icons: ^0.14.4
 
 flutter:
   uses-material-design: true
