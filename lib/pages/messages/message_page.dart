@@ -5,12 +5,14 @@ import 'package:geolocator/geolocator.dart';
 import 'package:intl/intl.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:petguardian/pages/shop_page.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:petguardian/pages/pet_detail_page.dart';
 import 'package:petguardian/services/firebase_messaging_service.dart';
 import 'package:petguardian/stuff/formatters.dart';
 import '../../settings/map_screen.dart';
 import '../../stuff/app_network_image.dart';
+import 'dart:convert';
 
 class ChatMessage {
   final String id;
@@ -852,21 +854,23 @@ class _MessagePageState extends State<MessagePage> {
   }
 
   Widget _buildProductCardMessage(String productData) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        // Saturated hue + translucent wash: stays legible in dark mode too
-        // (the previous orange[50] fill turned into a glaring light box).
-        color: Colors.orange.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.orange.withValues(alpha: 0.4)),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.shopping_bag, color: Colors.orange, size: 24),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
+    final product = _parseProductPayload(productData);
+    final scheme = Theme.of(context).colorScheme;
+
+    if (product == null) {
+      // Not a valid payload (older placeholder messages, corrupted data).
+      return Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.orange.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.orange.withValues(alpha: 0.4)),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.shopping_bag, color: Colors.orange, size: 24),
+            const SizedBox(width: 8),
+            Text(
               '🛍️ Ürün kartı paylaşıldı',
               style: TextStyle(
                 fontSize: 14,
@@ -874,8 +878,153 @@ class _MessagePageState extends State<MessagePage> {
                 color: Colors.orange,
               ),
             ),
-          ),
-        ],
+          ],
+        ),
+      );
+    }
+
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => const ShopPage()),
+      ),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          // Saturated hue + translucent wash: stays legible in dark mode too.
+          color: Colors.orange.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.orange.withValues(alpha: 0.4)),
+        ),
+        child: Row(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: Image.asset(
+                product.imagePath,
+                width: 56,
+                height: 56,
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) => Container(
+                  width: 56,
+                  height: 56,
+                  color: scheme.surfaceContainerHighest,
+                  child: Icon(
+                    Icons.shopping_bag,
+                    color: scheme.onSurfaceVariant,
+                    size: 24,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    product.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: scheme.onSurface,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '₺${product.price.toStringAsFixed(2)}',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.orange,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Markette Gör',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right, color: scheme.onSurfaceVariant),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Parses the JSON payload written by _pickProductAndShare(). Older
+  /// placeholder messages are plain text and render as the static label.
+  ProductInfo? _parseProductPayload(String payload) {
+    try {
+      final map = jsonDecode(payload);
+      if (map is! Map<String, dynamic>) return null;
+      final img = map['img']?.toString() ?? '';
+      final title = map['title']?.toString() ?? '';
+      final price = (map['price'] as num?)?.toDouble();
+      if (img.isEmpty || title.isEmpty || price == null) return null;
+      return ProductInfo(img, title, price);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Lets the sender recommend a shop product by sharing its card. The
+  /// payload is self-contained (image asset, title, price) so the receiver
+  /// never needs a product lookup; "Markette Gör" opens the shop.
+  Future<void> _pickProductAndShare() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: ListView.builder(
+          shrinkWrap: true,
+          itemCount: kProductCatalog.length,
+          itemBuilder: (sheetContext, i) {
+            final product = kProductCatalog[i];
+            return ListTile(
+              leading: ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: Image.asset(
+                  product.imagePath,
+                  width: 48,
+                  height: 48,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) => Container(
+                    width: 48,
+                    height: 48,
+                    color: Theme.of(sheetContext).colorScheme.surfaceContainerHighest,
+                    child: Icon(
+                      Icons.shopping_bag,
+                      size: 20,
+                      color: Theme.of(sheetContext).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+              ),
+              title: Text(product.title),
+              subtitle: Text('₺${product.price.toStringAsFixed(2)}'),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                _sendMessage(
+                  messageText: jsonEncode({
+                    'img': product.imagePath,
+                    'title': product.title,
+                    'price': product.price,
+                  }),
+                  type: 'product_card',
+                );
+              },
+            );
+          },
+        ),
       ),
     );
   }
@@ -1009,7 +1158,7 @@ class _MessagePageState extends State<MessagePage> {
               title: const Text('Ürün Paylaş'),
               onTap: () {
                 Navigator.pop(context);
-                // TODO: Implement product card sharing
+                _pickProductAndShare();
               },
             ),
           ],
