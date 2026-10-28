@@ -2,6 +2,7 @@ import 'package:petguardian/pages/messages/message_page.dart';
 import 'package:petguardian/stuff/formatters.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// Cached profile of the other participant in a conversation.
 class _UserInfo {
@@ -61,12 +62,37 @@ class _ChatListPageState extends State<ChatListPage> {
   /// state and offers the unblock action.
   final Set<String> _blockedCounterparts = <String>{};
 
+  /// Conversation ids muted locally on the message page (SharedPreferences),
+  /// so the list can show a notifications-off glyph without extra reads.
+  final Set<String> _mutedChatIds = <String>{};
+
   FirebaseFirestore get _db => widget.firestore ?? FirebaseFirestore.instance;
 
   @override
   void initState() {
     super.initState();
     _loadBlockedCounterparts();
+    _loadMutedChats();
+  }
+
+  /// Loads the locally muted conversation ids. The message page writes them
+  /// as `chat_muted_<chatId>` booleans; the suffix is the chat id itself.
+  Future<void> _loadMutedChats() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (!mounted) return;
+      setState(() {
+        _mutedChatIds
+          ..clear()
+          ..addAll(
+            prefs.getKeys().where((key) => key.startsWith('chat_muted_')).map(
+                  (key) => key.substring('chat_muted_'.length),
+                ),
+          );
+      });
+    } catch (e) {
+      debugPrint('Sessize alınan sohbetler okunamadı: $e');
+    }
   }
 
   /// Two single-field equality queries (no composite index needed) cover both
@@ -186,6 +212,13 @@ class _ChatListPageState extends State<ChatListPage> {
     }).toList();
   }
 
+  /// Same chat-id algorithm as message_page._generateChatId(): sorted uids
+  /// joined with '_'. Used to look up the locally muted set per row.
+  String _chatIdFor(_Conversation conversation) {
+    final uids = [widget.currentUserUID, conversation.otherUID]..sort();
+    return uids.join('_');
+  }
+
   bool get _searchIsWaitingOnNames => _query.isNotEmpty && _pendingUIDs.isNotEmpty;
 
   @override
@@ -240,9 +273,10 @@ class _ChatListPageState extends State<ChatListPage> {
 
           return RefreshIndicator(
             onRefresh: () async {
-              // Pull-to-refresh re-resolves the block set alongside the
-              // stream's own live updates.
+              // Pull-to-refresh re-resolves the block set and the locally
+              // muted set alongside the stream's own live updates.
               await _loadBlockedCounterparts();
+              await _loadMutedChats();
             },
             child: ListView.builder(
               padding: const EdgeInsets.symmetric(vertical: 8),
@@ -491,6 +525,16 @@ class _ChatListPageState extends State<ChatListPage> {
                   Icons.block,
                   size: 16,
                   color: Theme.of(context).colorScheme.error,
+                ),
+              ),
+            ] else if (_mutedChatIds.contains(_chatIdFor(conversation))) ...[
+              const SizedBox(width: 8),
+              Tooltip(
+                message: 'Bu sohbet sessize alındı',
+                child: Icon(
+                  Icons.notifications_off,
+                  size: 16,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
               ),
             ],

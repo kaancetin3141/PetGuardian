@@ -1015,14 +1015,8 @@ class _MessagePageState extends State<MessagePage> {
 
   /// Parses the `"<lat>,<lng>"` payload written by _sendLocation(). Messages
   /// sent by older clients carry no coordinates and render as plain text.
-  (double, double)? _parseLocationPayload(String payload) {
-    final parts = payload.split(',');
-    if (parts.length != 2) return null;
-    final lat = double.tryParse(parts[0].trim());
-    final lng = double.tryParse(parts[1].trim());
-    if (lat == null || lng == null) return null;
-    return (lat, lng);
-  }
+  (double, double)? _parseLocationPayload(String payload) =>
+      AppFormatters.parseLocationPayload(payload);
 
   Widget _buildPetCardMessage(String petId) {
     // The card fetches the listing live: if it was deleted after being
@@ -1321,17 +1315,9 @@ class _MessagePageState extends State<MessagePage> {
   /// Parses the JSON payload written by _pickProductAndShare(). Older
   /// placeholder messages are plain text and render as the static label.
   ProductInfo? _parseProductPayload(String payload) {
-    try {
-      final map = jsonDecode(payload);
-      if (map is! Map<String, dynamic>) return null;
-      final img = map['img']?.toString() ?? '';
-      final title = map['title']?.toString() ?? '';
-      final price = (map['price'] as num?)?.toDouble();
-      if (img.isEmpty || title.isEmpty || price == null) return null;
-      return ProductInfo(img, title, price);
-    } catch (_) {
-      return null;
-    }
+    final parsed = AppFormatters.parseProductPayload(payload);
+    if (parsed == null) return null;
+    return ProductInfo(parsed.$1, parsed.$2, parsed.$3);
   }
 
   /// Lets the sender recommend a shop product by sharing its card. The

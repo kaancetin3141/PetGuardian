@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -71,6 +73,35 @@ class AppFormatters {
         return Icons.shopping_bag;
       default:
         return null;
+    }
+  }
+
+  /// Parses the `"<lat>,<lng>"` payload written by the chat's location share.
+  /// Returns null for anything else (legacy placeholder messages carried no
+  /// coordinates and render as plain text).
+  static (double, double)? parseLocationPayload(String payload) {
+    final parts = payload.split(',');
+    if (parts.length != 2) return null;
+    final lat = double.tryParse(parts[0].trim());
+    final lng = double.tryParse(parts[1].trim());
+    if (lat == null || lng == null) return null;
+    return (lat, lng);
+  }
+
+  /// Parses the JSON product-card payload into an `(img, title, price)`
+  /// record, or null when the payload is not valid product data (older
+  /// placeholder messages are plain text; corrupted data is tolerated).
+  static (String, String, double)? parseProductPayload(String payload) {
+    try {
+      final map = jsonDecode(payload);
+      if (map is! Map<String, dynamic>) return null;
+      final img = map['img']?.toString() ?? '';
+      final title = map['title']?.toString() ?? '';
+      final price = (map['price'] as num?)?.toDouble();
+      if (img.isEmpty || title.isEmpty || price == null) return null;
+      return (img, title, price);
+    } catch (_) {
+      return null;
     }
   }
 }

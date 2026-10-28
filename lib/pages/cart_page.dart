@@ -157,6 +157,217 @@ class _CartPageState extends State<CartPage> {
     );
   }
 
+  /// Read-only order history for the signed-in customer. The query filters on
+  /// userUID only (a composite index would be required for ordering on the
+  /// server side); the newest-first ordering happens client-side.
+  void _openOrdersSheet() {
+    final uid = _uid;
+    if (uid == null) {
+      _showMessage('Siparişleriniz için giriş yapmalısınız.', isError: true);
+      return;
+    }
+
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        final scheme = Theme.of(sheetContext).colorScheme;
+        return SafeArea(
+          child: SizedBox(
+            height: 480,
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+                  child: Row(
+                    children: [
+                      Icon(Icons.receipt_long, size: 20, color: scheme.primary),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Siparişlerim',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          color: scheme.onSurface,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                    stream: _db
+                        .collection('orders')
+                        .where('userUID', isEqualTo: uid)
+                        .limit(50)
+                        .snapshots(),
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState ==
+                          ConnectionState.waiting) {
+                        return const Center(
+                            child: CircularProgressIndicator());
+                      }
+                      if (snapshot.hasError) {
+                        return Center(
+                          child: Text(
+                            'Siparişler yüklenemedi.',
+                            style: TextStyle(color: scheme.onSurfaceVariant),
+                          ),
+                        );
+                      }
+
+                      final docs = snapshot.data?.docs ?? const [];
+                      // Newest first on the client; createdAt is a server
+                      // timestamp and may still be pending on recent orders.
+                      final orders = docs.toList()
+                        ..sort((a, b) {
+                          final at = (a.data()['createdAt'] as Timestamp?)
+                                  ?.toDate() ??
+                              DateTime(2000);
+                          final bt = (b.data()['createdAt'] as Timestamp?)
+                                  ?.toDate() ??
+                              DateTime(2000);
+                          return bt.compareTo(at);
+                        });
+
+                      if (orders.isEmpty) {
+                        return Center(
+                          child: Text(
+                            'Henüz siparişiniz yok.',
+                            style: TextStyle(color: scheme.onSurfaceVariant),
+                          ),
+                        );
+                      }
+
+                      return ListView.builder(
+                        padding: const EdgeInsets.all(16),
+                        itemCount: orders.length,
+                        itemBuilder: (context, i) {
+                          final data = orders[i].data();
+                          final items = List<Map<String, dynamic>>.from(
+                              data['items'] ?? const []);
+                          final totalCents = data['totalCents'];
+                          final created =
+                              (data['createdAt'] as Timestamp?)?.toDate();
+                          return _buildOrderCard(
+                            sheetContext,
+                            items: items,
+                            totalCents: totalCents is int ? totalCents : 0,
+                            status: data['status']?.toString() ?? '',
+                            created: created,
+                          );
+                        },
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildOrderCard(
+    BuildContext sheetContext, {
+    required List<Map<String, dynamic>> items,
+    required int totalCents,
+    required String status,
+    required DateTime? created,
+  }) {
+    final scheme = Theme.of(sheetContext).colorScheme;
+    final (Color chipBg, Color chipFg, String statusLabel) = switch (status) {
+      'paid' => (scheme.primaryContainer, scheme.onPrimaryContainer, 'Ödendi'),
+      'shipped' => (
+          scheme.primaryContainer,
+          scheme.onPrimaryContainer,
+          'Kargoya Verildi'
+        ),
+      'delivered' => (
+          scheme.primaryContainer,
+          scheme.onPrimaryContainer,
+          'Teslim Edildi'
+        ),
+      'cancelled' => (scheme.errorContainer, scheme.onErrorContainer, 'İptal Edildi'),
+      _ => (
+          scheme.surfaceContainerHighest,
+          scheme.onSurfaceVariant,
+          'Ödeme Bekliyor'
+        ),
+    };
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 10),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    created == null
+                        ? 'Sipariş'
+                        : DateFormat('dd.MM.yyyy HH:mm').format(created),
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: scheme.onSurface,
+                    ),
+                  ),
+                ),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: chipBg,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    statusLabel,
+                    style: TextStyle(fontSize: 11, color: chipFg),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            for (final item in items)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 2),
+                child: Text(
+                  '${item['quantity']}× ${item['title']}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+            const Divider(height: 16),
+            Row(
+              children: [
+                Text(
+                  'Toplam',
+                  style: TextStyle(color: scheme.onSurfaceVariant),
+                ),
+                const Spacer(),
+                Text(
+                  '₺${(totalCents / 100).toStringAsFixed(2)}',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    color: scheme.onSurface,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final currency = NumberFormat.currency(
@@ -172,6 +383,13 @@ class _CartPageState extends State<CartPage> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         automaticallyImplyLeading: false, // Geri Dön butonunu iptal eder
+        actions: [
+          IconButton(
+            tooltip: 'Siparişlerim',
+            icon: const Icon(Icons.receipt_long),
+            onPressed: _openOrdersSheet,
+          ),
+        ],
       ),
       body: widget.productList.isEmpty
           ? _buildEmptyCart()

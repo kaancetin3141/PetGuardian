@@ -97,4 +97,77 @@ void main() {
       expect(AppFormatters.messageTypeIcon('product_card'), isNotNull);
     });
   });
+
+  group('parseLocationPayload', () {
+    test('parses the "<lat>,<lng>" payload written by the location share', () {
+      expect(
+        AppFormatters.parseLocationPayload('41.0082,28.9784'),
+        (41.0082, 28.9784),
+      );
+    });
+
+    test('tolerates whitespace around the numbers', () {
+      expect(
+        AppFormatters.parseLocationPayload('41.0 , 28.97'),
+        (41.0, 28.97),
+      );
+    });
+
+    test('returns null for legacy coordinate-less messages', () {
+      expect(AppFormatters.parseLocationPayload('📍 Konum paylaşıldı'), isNull);
+    });
+
+    test('returns null for malformed payloads', () {
+      expect(AppFormatters.parseLocationPayload(''), isNull);
+      expect(AppFormatters.parseLocationPayload('41.0082'), isNull);
+      expect(AppFormatters.parseLocationPayload('a,b'), isNull);
+      expect(
+        AppFormatters.parseLocationPayload('41.0082,28.9784,extra'),
+        isNull,
+      );
+    });
+  });
+
+  group('parseProductPayload', () {
+    test('parses the JSON payload written by the product share', () {
+      expect(
+        AppFormatters.parseProductPayload(
+          '{"img":"images/shop_images/product1.jpg",'
+          '"title":"PetGuardian Tasma","price":99.99}',
+        ),
+        ('images/shop_images/product1.jpg', 'PetGuardian Tasma', 99.99),
+      );
+    });
+
+    test('accepts integer prices', () {
+      expect(
+        AppFormatters.parseProductPayload(
+          '{"img":"i.jpg","title":"Mama","price":100}',
+        ),
+        ('i.jpg', 'Mama', 100.0),
+      );
+    });
+
+    test('returns null for legacy plain-text placeholders', () {
+      expect(AppFormatters.parseProductPayload('🛍️ Ürün kartı paylaşıldı'), isNull);
+    });
+
+    test('returns null for broken JSON', () {
+      expect(AppFormatters.parseProductPayload('{img: x'), isNull);
+    });
+
+    test('returns null when fields are missing', () {
+      expect(AppFormatters.parseProductPayload('{"title":"Mama"}'), isNull);
+      expect(
+        AppFormatters.parseProductPayload('{"img":"i.jpg","title":"Mama"}'),
+        isNull,
+      );
+      expect(
+        AppFormatters.parseProductPayload(
+          '{"img":"","title":"Mama","price":1}',
+        ),
+        isNull,
+      );
+    });
+  });
 }
