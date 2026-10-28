@@ -572,6 +572,56 @@ async function run() {
   await check('reviews cannot be deleted by anyone', () =>
     assertFails(bobDb.doc('reviews/pet-1_alice-uid').delete()));
 
+  console.log('\n== blocks (chat blocking) ==');
+  // Exact payload written by message_page.dart _toggleBlock().
+  const blockPayload = {
+    blockerUID: 'alice-uid',
+    blockedUID: 'bob-uid',
+    createdAt: new Date(),
+  };
+
+  await check('user can block another user', () =>
+    assertSucceeds(aliceDb.doc('blocks/alice-uid_bob-uid').set(blockPayload)));
+  await check('blocking yourself is denied', () =>
+    assertFails(aliceDb.doc('blocks/alice-uid_alice-uid').set({
+      ...blockPayload, blockedUID: 'alice-uid',
+    })));
+  await check('block fields must match the document id', () =>
+    assertFails(aliceDb.doc('blocks/alice-uid_carol-uid').set(blockPayload)));
+  await check('cannot file a block under someone else s name', () =>
+    assertFails(bobDb.doc('blocks/alice-uid_carol-uid').set({
+      ...blockPayload, blockerUID: 'alice-uid', blockedUID: 'carol-uid',
+    })));
+
+  // The messages create rule consults blocks with exists() in both
+  // directions; a blocked chat is frozen for both sides until unblocked.
+  await check('blocked recipient cannot receive new messages', () =>
+    assertFails(aliceDb.collection('messages/alice_bob/chats').doc('mb1')
+      .set(messagePayload)));
+  await check('blocker cannot send into a blocked chat either', () =>
+    assertFails(bobDb.collection('messages/alice_bob/chats').doc('mb2')
+      .set({ ...messagePayload, senderUID: 'bob-uid', recipientUID: 'alice-uid' })));
+  await check('blocked user can still read chat history', () =>
+    assertSucceeds(bobDb.collection('messages/alice_bob/chats').get()));
+
+  await check('both block parties can read the block doc', () =>
+    assertSucceeds(bobDb.doc('blocks/alice-uid_bob-uid').get()));
+  await check('unrelated user cannot read someone else s block', () =>
+    assertFails(testEnv.authenticatedContext('carol-uid').firestore()
+      .doc('blocks/alice-uid_bob-uid').get()));
+  await check('blocks cannot be updated', () =>
+    assertFails(aliceDb.doc('blocks/alice-uid_bob-uid').update({
+      blockedUID: 'carol-uid',
+    })));
+  await check('blocked user cannot lift the block', () =>
+    assertFails(bobDb.doc('blocks/alice-uid_bob-uid').delete()));
+
+  await check('blocker can unblock', () =>
+    assertSucceeds(aliceDb.doc('blocks/alice-uid_bob-uid').delete()));
+  await check('sending works again after unblocking', () =>
+    assertSucceeds(aliceDb.collection('messages/alice_bob/chats').doc('mb3')
+      .set(messagePayload)));
+
   await testEnv.cleanup();
 
   console.log(`\n${passed} passed, ${failed} failed`);

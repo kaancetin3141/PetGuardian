@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -5,6 +8,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:intl/intl.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:petguardian/pages/shop_page.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:petguardian/pages/pet_detail_page.dart';
@@ -12,7 +16,6 @@ import 'package:petguardian/services/firebase_messaging_service.dart';
 import 'package:petguardian/stuff/formatters.dart';
 import '../../settings/map_screen.dart';
 import '../../stuff/app_network_image.dart';
-import 'dart:convert';
 
 class ChatMessage {
   final String id;
@@ -58,6 +61,24 @@ class _MessagePageState extends State<MessagePage> {
   String _chatId = '';
   bool _isLoading = false;
 
+  // Block state. Two directional docs under blocks/<blocker>_<blocked>: a
+  // block freezes the chat for BOTH sides until the blocker lifts it.
+  bool _isBlockedByMe = false;
+  bool _isBlockedByOther = false;
+  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>?
+      _myBlockSubscription;
+  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>?
+      _otherBlockSubscription;
+
+  // Sessize Al is a local-only preference (SharedPreferences works on web,
+  // Android and iOS); server-side delivery suppression needs FCM topics.
+  bool _isMuted = false;
+
+  // In-chat search ("Ara" menu action).
+  bool _isSearchActive = false;
+  String _searchQuery = '';
+  final TextEditingController _searchController = TextEditingController();
+
   @override
   void initState() {
     super.initState();
@@ -72,6 +93,140 @@ class _MessagePageState extends State<MessagePage> {
       _loadRecipientData();
       _markMessagesAsRead();
     });
+    _watchBlockState();
+    _loadMutedState();
+  }
+
+  /// Live-watches both directional block documents so the banner and the
+  /// disabled input react immediately when the other side blocks/unblocks.
+  void _watchBlockState() {
+    _myBlockSubscription = FirebaseFirestore.instance
+        .collection('blocks')
+        .doc('${widget.currentUserUID}_${widget.recipientUID}')
+        .snapshots()
+        .listen((snapshot) {
+      if (mounted) {
+        setState(() => _isBlockedByMe = snapshot.exists);
+      }
+    });
+    _otherBlockSubscription = FirebaseFirestore.instance
+        .collection('blocks')
+        .doc('${widget.recipientUID}_${widget.currentUserUID}')
+        .snapshots()
+        .listen((snapshot) {
+      if (mounted) {
+        setState(() => _isBlockedByOther = snapshot.exists);
+      }
+    });
+  }
+
+  Future<void> _loadMutedState() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (mounted) {
+        setState(() => _isMuted = prefs.getBool('chat_muted_$_chatId') ?? false);
+      }
+    } catch (e) {
+      debugPrint('Sessize alma durumu okunamadı: $e');
+    }
+  }
+
+  Future<void> _toggleMuted() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final newValue = !_isMuted;
+      await prefs.setBool('chat_muted_$_chatId', newValue);
+      if (mounted) {
+        setState(() => _isMuted = newValue);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              newValue
+                  ? 'Bu sohbet sessize alındı.'
+                  : 'Sohbetin sesi açıldı.',
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('Sessize alma ayarı yazılamadı: $e');
+    }
+  }
+
+  /// Blocks or unblocks the other participant, after a confirmation dialog
+  /// when blocking. The write shape mirrors the blocks create rule.
+  Future<void> _toggleBlock() async {
+    if (_isBlockedByMe) {
+      await _unblock();
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Engelle'),
+        content: Text(
+          '$recipientFullName adlı kişiyi engellemek istediğinize emin '
+          'misiniz? Sohbet iki taraf için de kilitlenir; engeli tekrar '
+          'kaldırana kadar yeni mesaj gönderilemez.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Vazgeç'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Engelle'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    try {
+      await FirebaseFirestore.instance
+          .collection('blocks')
+          .doc('${widget.currentUserUID}_${widget.recipientUID}')
+          .set({
+        'blockerUID': widget.currentUserUID,
+        'blockedUID': widget.recipientUID,
+        'createdAt': DateTime.now().toUtc(),
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Kişi engellendi.')),
+        );
+      }
+    } catch (e) {
+      debugPrint('Engelleme yazılamadı: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Engelleme tamamlanamadı.')),
+        );
+      }
+    }
+  }
+
+  Future<void> _unblock() async {
+    try {
+      await FirebaseFirestore.instance
+          .collection('blocks')
+          .doc('${widget.currentUserUID}_${widget.recipientUID}')
+          .delete();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Engel kaldırıldı.')),
+        );
+      }
+    } catch (e) {
+      debugPrint('Engel kaldırılamadı: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Engel kaldırılamadı.')),
+        );
+      }
+    }
   }
 
   /// Creates the conversation document for a brand-new chat.
@@ -174,6 +329,9 @@ class _MessagePageState extends State<MessagePage> {
   void dispose() {
     _messageController.dispose();
     _scrollController.dispose();
+    _searchController.dispose();
+    _myBlockSubscription?.cancel();
+    _otherBlockSubscription?.cancel();
     super.dispose();
   }
 
@@ -240,33 +398,34 @@ class _MessagePageState extends State<MessagePage> {
         foregroundColor: Theme.of(context).colorScheme.onSurface,
         elevation: 0,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.call),
-            onPressed: () {
-              // TODO: Implement voice call
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.videocam),
-            onPressed: () {
-              // TODO: Implement video call
-            },
-          ),
           PopupMenuButton<String>(
-            onSelected: (value) {
-              // TODO: Handle menu actions
-            },
+            onSelected: _handleMenuAction,
             itemBuilder: (context) => [
               const PopupMenuItem(value: 'search', child: Text('Ara')),
-              const PopupMenuItem(value: 'media', child: Text('Medya ve Dosyalar')),
-              const PopupMenuItem(value: 'mute', child: Text('Sessize Al')),
-              const PopupMenuItem(value: 'block', child: Text('Engelle')),
+              const PopupMenuItem(
+                  value: 'media', child: Text('Medya ve Dosyalar')),
+              PopupMenuItem(
+                value: 'mute',
+                child: Text(_isMuted ? 'Sesi Aç' : 'Sessize Al'),
+              ),
+              PopupMenuItem(
+                value: 'block',
+                child: Text(
+                  _isBlockedByMe ? 'Engeli Kaldır' : 'Engelle',
+                  style: TextStyle(
+                    color: _isBlockedByMe
+                        ? null
+                        : Theme.of(context).colorScheme.error,
+                  ),
+                ),
+              ),
             ],
           ),
         ],
       ),
       body: Column(
         children: [
+          if (_isSearchActive) _buildSearchBar(),
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
@@ -303,13 +462,32 @@ class _MessagePageState extends State<MessagePage> {
                 }
 
                 final docs = snapshot.data?.docs ?? [];
+                final visibleDocs = _searchQuery.isEmpty
+                    ? docs
+                    : docs
+                        .where((d) => (d['message']?.toString() ?? '')
+                            .toLowerCase()
+                            .contains(_searchQuery))
+                        .toList();
 
-                if (docs.isEmpty) {
+                if (visibleDocs.isEmpty) {
+                  // While searching, "nothing found" must not read like
+                  // "the chat is empty" — show a distinct state.
+                  if (_searchQuery.isNotEmpty) {
+                    return Center(
+                      child: Text(
+                        'Aramanızla eşleşen mesaj yok.',
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    );
+                  }
                   return _buildEmptyState();
                 }
 
                 // Group messages by date
-                final groupedMessages = _groupMessagesByDate(docs);
+                final groupedMessages = _groupMessagesByDate(visibleDocs);
 
                 return ListView.builder(
                   controller: _scrollController,
@@ -329,9 +507,189 @@ class _MessagePageState extends State<MessagePage> {
               },
             ),
           ),
+          if (_isBlocked) _buildBlockedBanner(),
           _buildInputArea(),
         ],
       ),
+    );
+  }
+
+  bool get _isBlocked => _isBlockedByMe || _isBlockedByOther;
+
+  void _handleMenuAction(String value) {
+    switch (value) {
+      case 'search':
+        setState(() => _isSearchActive = true);
+      case 'media':
+        _openMediaSheet();
+      case 'mute':
+        _toggleMuted();
+      case 'block':
+        _toggleBlock();
+    }
+  }
+
+  Widget _buildSearchBar() {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      color: scheme.surface,
+      child: Row(
+        children: [
+          Expanded(
+            child: TextField(
+              controller: _searchController,
+              autofocus: true,
+              onChanged: (value) => setState(() => _searchQuery = value.toLowerCase()),
+              decoration: InputDecoration(
+                isDense: true,
+                hintText: 'Mesajlarda ara',
+                prefixIcon: const Icon(Icons.search, size: 20),
+                filled: true,
+                fillColor: scheme.surfaceContainerHighest,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(24),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.close),
+            onPressed: () {
+              _searchController.clear();
+              setState(() {
+                _isSearchActive = false;
+                _searchQuery = '';
+              });
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBlockedBanner() {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      color: scheme.errorContainer,
+      child: Row(
+        children: [
+          Icon(Icons.block, size: 18, color: scheme.onErrorContainer),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              _isBlockedByMe
+                  ? 'Bu kişiyi engellediniz; mesaj gönderilemez.'
+                  : 'Bu sohbet engellendi; mesaj gönderilemez.',
+              style: TextStyle(fontSize: 13, color: scheme.onErrorContainer),
+            ),
+          ),
+          if (_isBlockedByMe)
+            TextButton(
+              onPressed: _unblock,
+              style: TextButton.styleFrom(
+                foregroundColor: scheme.onErrorContainer,
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+              ),
+              child: const Text('Engeli Kaldır'),
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// Grid of every photo shared in this conversation, newest first. Filtering
+  /// happens client-side: a `where(type) + orderBy(timestamp)` pair would need
+  /// a composite index that no client code path creates.
+  void _openMediaSheet() {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        final scheme = Theme.of(sheetContext).colorScheme;
+        return SafeArea(
+          child: SizedBox(
+            height: 440,
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+                  child: Row(
+                    children: [
+                      Icon(Icons.photo_library, size: 20, color: scheme.primary),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Medya ve Dosyalar',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          color: scheme.onSurface,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: FutureBuilder<QuerySnapshot>(
+                    future: FirebaseFirestore.instance
+                        .collection('messages')
+                        .doc(_chatId)
+                        .collection('chats')
+                        .orderBy('timestamp', descending: true)
+                        .limit(300)
+                        .get(),
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Center(
+                            child: CircularProgressIndicator());
+                      }
+                      final mediaUrls = (snapshot.data?.docs ?? const [])
+                          .where((d) => d['type']?.toString() == 'image')
+                          .map((d) => d['message']?.toString() ?? '')
+                          .where((url) => url.isNotEmpty)
+                          .toList();
+                      if (mediaUrls.isEmpty) {
+                        return Center(
+                          child: Text(
+                            'Bu sohbette paylaşılan medya yok.',
+                            style: TextStyle(color: scheme.onSurfaceVariant),
+                          ),
+                        );
+                      }
+                      return GridView.builder(
+                        padding: const EdgeInsets.all(12),
+                        gridDelegate:
+                            const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 3,
+                          mainAxisSpacing: 4,
+                          crossAxisSpacing: 4,
+                        ),
+                        itemCount: mediaUrls.length,
+                        itemBuilder: (context, i) => GestureDetector(
+                          onTap: () {
+                            Navigator.of(sheetContext).pop();
+                            _openImageViewer(mediaUrls[i]);
+                          },
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(6),
+                            child: AppNetworkImage(
+                              url: mediaUrls[i],
+                              fit: BoxFit.cover,
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -1050,7 +1408,7 @@ class _MessagePageState extends State<MessagePage> {
             IconButton(
               icon: Icon(Icons.attach_file,
                   color: Theme.of(context).colorScheme.onSurfaceVariant),
-              onPressed: _showAttachmentOptions,
+              onPressed: _isBlocked ? null : _showAttachmentOptions,
             ),
             // Camera button
             _isLoading
@@ -1065,7 +1423,9 @@ class _MessagePageState extends State<MessagePage> {
                 : IconButton(
                     icon: Icon(Icons.camera_alt,
                         color: Theme.of(context).colorScheme.onSurfaceVariant),
-                    onPressed: () => _pickAndSendImage(ImageSource.camera),
+                    onPressed: _isBlocked
+                        ? null
+                        : () => _pickAndSendImage(ImageSource.camera),
                   ),
             // Text field
             Expanded(
@@ -1079,8 +1439,9 @@ class _MessagePageState extends State<MessagePage> {
                   controller: _messageController,
                   maxLines: null,
                   textCapitalization: TextCapitalization.sentences,
+                  enabled: !_isBlocked,
                   decoration: InputDecoration(
-                    hintText: 'Mesaj yazın...',
+                    hintText: _isBlocked ? 'Sohbet engellendi' : 'Mesaj yazın...',
                     hintStyle: TextStyle(
                         color: Theme.of(context).colorScheme.onSurfaceVariant),
                     border: InputBorder.none,
@@ -1102,7 +1463,7 @@ class _MessagePageState extends State<MessagePage> {
                   Icons.send,
                   color: Theme.of(context).colorScheme.onPrimary,
                 ),
-                onPressed: _sendMessage,
+                onPressed: _isBlocked ? null : _sendMessage,
               ),
             ),
           ],
@@ -1246,6 +1607,9 @@ class _MessagePageState extends State<MessagePage> {
     if (text.isEmpty && type == 'text') return;
 
     if (widget.currentUserUID == widget.recipientUID) return;
+    // Client-side mirror of the rules check: no point attempting a write the
+    // emulator-less rules will refuse while a block is in place.
+    if (_isBlocked) return;
 
     HapticFeedback.lightImpact();
 

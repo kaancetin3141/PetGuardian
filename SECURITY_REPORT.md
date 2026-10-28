@@ -2,7 +2,7 @@
 
 Tarih: 2026-10-27 · Kapsam: `firestore.rules`, `storage.rules`, `lib/` istemci kodu
 Yöntem: kod denetimi + Firestore emülatörü üzerinde adversaryal senaryolar (`@firebase/rules-unit-testing`)
-Güncelleme: 2026-10-28 — kural seti 88 → **123 assertion**'a çıktı (`reports` + `applications` + `reviews` koleksiyonları); tümü emülatörde yeşil.
+Güncelleme: 2026-10-28 - kural seti 88 → **136 assertion**'a çıktı (`reports` + `applications` + `reviews` + `blocks` koleksiyonları, mesaj create'inde engel kontrolü); tümü emülatörde yeşil.
 
 ## Sonuç
 
@@ -49,3 +49,14 @@ Listeleme değerlendirmeleri (`reviews/<petId>_<authorUid>`, tek değerlendirme/
 - **read**: imzalı herkes (listeleme sayfası ortak veri).
 - **update / delete**: tüm istemciler için reddedildi — değerlendirmeler değiştirilemez; düzenleme/detaylandırma moderasyonu kural dışıdır.
 - Test: 13 assertion — kimliksiz başvuru, sahte yazar, kendi ilanı, 0/6/4.5 puan, aşırı uzun ve boş yorum, yabancı okuma, aynı kayda ikinci yazım, güncelleme ve silme denemeleri.
+
+## blocks koleksiyonu + mesaj engeli (2026-10-28 ek)
+
+Sohbet engelleme (`blocks/<blockerUid>_<blockedUid>`, deterministik ve sahteciliğe kapalı kimlik):
+
+- **create**: `blockId`'nin ilk yarısı çağıranın uid'i olmalı ve alanlar kimlikle eşleşmeli (`blockerUID == request.auth.uid`, `blockId.split('_')[1] == blockedUID`); kendi kendini engelleme reddedilir; `createdAt` zorunlu.
+- **read**: yalnızca taraflar (engel koyan **veya** engellenen) — engellenen tarafın "gönderebilir miyim?" `exists()` değerlendirmesi için gerekli.
+- **update**: tüm istemciler için reddedildi. **delete**: yalnızca engel koyan taraf (engeli kaldırma).
+- **messages create kuralı**: artık iki yönlü `exists()` kontrolü yapıyor — iki taraftan herhangi biri engelliyse yeni mesaj her iki yönde de reddedilir; engel kalkınca gönderim otomatik açılır. `recipientUID` için tip denetimi eklendi (path interpolasyonu öncesi).
+- İstemci: mesaj sayfası her iki yönlü engel dokümanını canlı dinler; banner + kilitli giriş alanı; menüde Engelle/Engeli Kaldır; engel onay diyaloglu.
+- Test: 13 assertion — kendi kendini engelleme, kimlik/alan uyuşmazlığı, başkası adına engel, engelli gönderim (iki yön), engellenen tarafın geçmişi okuyabilmesi, yabancı okuma, güncelleme, engel kaldırma denemesi, engeli kaldırma sonrası yeniden gönderim.

@@ -271,6 +271,11 @@ allow update: if isParticipantOf(resource.data)
           && request.resource.data.participants == conversation().data.participants
           && request.resource.data.senderUID == request.auth.uid
           && request.resource.data.recipientUID != request.auth.uid
+          && request.resource.data.recipientUID is string
+          // No new messages in either direction while a block exists
+          // (either side may have blocked; unblocking restores sending).
+          && !exists(/databases/$(database)/documents/blocks/$(request.auth.uid + '_' + request.resource.data.recipientUID))
+          && !exists(/databases/$(database)/documents/blocks/$(request.resource.data.recipientUID + '_' + request.auth.uid))
           && request.resource.data.message is string
           && request.resource.data.message.size() > 0
           && request.resource.data.timestamp is timestamp;
@@ -435,6 +440,39 @@ allow update: if isParticipantOf(resource.data)
 
       allow update: if false;
       allow delete: if false;
+    }
+
+    // ------------------------------------------------------------------
+    // blocks/{blockId}
+    //
+    // Chat blocking ("Engelle"). The document id is <blockerUid>_<blockedUid>,
+    // so a block is a deterministic, non-forgeable pair: the id's first half
+    // must be the caller and the fields must match the id. The messages
+    // create rule consults both directional docs with exists(), which is why
+    // BOTH parties may read (a blocked sender evaluating "can I send?" needs
+    // to resolve the doc that names them as blockedUID).
+    // ------------------------------------------------------------------
+    match /blocks/{blockId} {
+      allow read: if isSignedIn()
+        && resource != null
+        && (resource.data.blockerUID == request.auth.uid
+            || resource.data.blockedUID == request.auth.uid);
+
+      allow create: if isSignedIn()
+        && blockId.split('_').size() == 2
+        && blockId.split('_')[0] == request.auth.uid
+        && request.resource.data.blockerUID == request.auth.uid
+        && request.resource.data.blockedUID is string
+        && blockId.split('_')[1] == request.resource.data.blockedUID
+        && request.resource.data.blockedUID != request.auth.uid
+        && request.resource.data.createdAt is timestamp;
+
+      allow update: if false;
+
+      // Only the blocker may lift the block.
+      allow delete: if isSignedIn()
+        && resource != null
+        && resource.data.blockerUID == request.auth.uid;
     }
 
     // Anything not matched above is denied.
