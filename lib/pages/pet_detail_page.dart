@@ -867,9 +867,12 @@ Future<bool> toggleFavoriteStatus(
                     ),
                     _buildInfoItem('Telefon Numarası', phone),
                     _buildInfoItem('Hayvan Türü', kinds),
-                    _buildInfoItem('Sahiplenme Durumu', adoption),
-                    _buildInfoItem('Çip Durumu', chip),
-                    _buildInfoItem('Aşı Durumu', vaccine),
+                    const SizedBox(height: 12),
+                    _buildHealthSection(
+                      adoption: adoption,
+                      chip: chip,
+                      vaccine: vaccine,
+                    ),
                     const SizedBox(height: 16),
                     ElevatedButton(
                       onPressed: () async {
@@ -997,6 +1000,140 @@ Future<bool> toggleFavoriteStatus(
           style: const TextStyle(fontSize: 16),
         ),
       ],
+    );
+  }
+
+  /// Health & record section of the detail page: vaccine, chip and adoption
+  /// history rendered as status tiles instead of three plain text rows.
+  Widget _buildHealthSection({
+    required String adoption,
+    required String chip,
+    required String vaccine,
+  }) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.health_and_safety, size: 18, color: scheme.primary),
+              const SizedBox(width: 6),
+              Text(
+                'Sağlık & Kayıt Durumu',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: scheme.onSurface,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          _buildHealthTile(
+            icon: Icons.vaccines,
+            label: 'Aşı',
+            value: vaccine,
+          ),
+          const SizedBox(height: 8),
+          _buildHealthTile(
+            icon: Icons.qr_code_2,
+            label: 'Çip',
+            value: chip,
+          ),
+          const SizedBox(height: 8),
+          _buildHealthTile(
+            icon: Icons.volunteer_activism,
+            label: 'Sahiplendirme',
+            value: adoption,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHealthTile({
+    required IconData icon,
+    required String label,
+    required String value,
+  }) {
+    final scheme = Theme.of(context).colorScheme;
+    final (Color badgeBg, Color badgeFg, IconData badgeIcon) =
+        _healthStatus(value, scheme);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: scheme.surface,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 22, color: scheme.primary),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+                Text(
+                  value,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: scheme.onSurface,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.all(5),
+            decoration: BoxDecoration(
+              color: badgeBg,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(badgeIcon, size: 14, color: badgeFg),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Maps a stored health value onto a status badge. Accepts both the values
+  /// the current form writes (Aşıları Tam / Çip Takılı / Daha Önce
+  /// Sahiplendirilmedi …) and looser legacy values like Var/Yok, falling back
+  /// to a neutral "unknown" badge for anything unrecognized.
+  (Color, Color, IconData) _healthStatus(String value, ColorScheme scheme) {
+    final v = value.toLowerCase();
+    final isGood = v.contains('tam') ||
+        (v.contains('tak') && !v.contains('değil') && !v.contains('degil')) ||
+        v.contains('sahiplendirilmedi') ||
+        v.contains('var');
+    final isWarn = (v.contains('tak') &&
+            (v.contains('değil') || v.contains('degil'))) ||
+        v.contains('eksik') ||
+        v.contains('yok');
+    if (isGood && !isWarn) {
+      return (scheme.primaryContainer, scheme.onPrimaryContainer, Icons.check_circle);
+    }
+    if (isWarn) {
+      return (scheme.errorContainer, scheme.onErrorContainer, Icons.warning_amber_rounded);
+    }
+    return (
+      scheme.surfaceContainerHighest,
+      scheme.onSurfaceVariant,
+      Icons.help_outline
     );
   }
 }
