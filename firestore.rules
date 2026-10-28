@@ -403,6 +403,40 @@ allow update: if isParticipantOf(resource.data)
       allow delete: if false;
     }
 
+    // ------------------------------------------------------------------
+    // reviews/{reviewId}
+    //
+    // Listing reviews ("Değerlendirme"). The document id is
+    // <petId>_<authorUid>, so "one review per user per pet" is structural.
+    // Reviews are immutable once filed; nobody can edit or delete them from
+    // a client (moderation happens out of band).
+    // ------------------------------------------------------------------
+    match /reviews/{reviewId} {
+      function validReview(data) {
+        return data.petId is string
+          && data.petId.size() > 0
+          && data.authorUID is string
+          && data.authorUID == request.auth.uid
+          && data.ownerUID is string
+          && data.ownerUID.size() > 0
+          && data.ownerUID != data.authorUID
+          && data.rating is number
+          && data.rating >= 1
+          && data.rating <= 5
+          && data.rating == math.round(data.rating)
+          && data.comment is string
+          && data.comment.size() <= 500
+          && data.createdAt is timestamp;
+      }
+
+      allow read: if isSignedIn();
+
+      allow create: if isSignedIn() && validReview(request.resource.data);
+
+      allow update: if false;
+      allow delete: if false;
+    }
+
     // Anything not matched above is denied.
   }
 }

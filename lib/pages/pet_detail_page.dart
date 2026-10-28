@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../stuff/app_network_image.dart';
+import '../stuff/formatters.dart';
 
 class PetDetailPage extends StatefulWidget {
   final String petId;
@@ -38,6 +39,11 @@ class _PetDetailPageState extends State<PetDetailPage> {
   bool _hasApplied = false;
   bool _isSubmittingApplication = false;
 
+  // Listing-review state: reviews/<petId>_<uid>, one per user per pet,
+  // immutable once filed.
+  bool _hasReviewed = false;
+  bool _isSubmittingReview = false;
+
   /// Reason choices offered in the report dialog.
   static const List<String> _reportReasons = [
     'Misleading or fake listing',
@@ -53,6 +59,7 @@ class _PetDetailPageState extends State<PetDetailPage> {
     loadFavoriteStatus();
     _loadReportStatus();
     _loadApplicationStatus();
+    _loadReviewStatus();
   }
 
   /// Checks whether the signed-in user already applied for this pet, so the
@@ -578,6 +585,365 @@ Future<bool> toggleFavoriteStatus(
     );
   }
 
+  /// Checks whether the signed-in user already reviewed this pet, so the
+  /// review action renders in its resolved (already-reviewed) state.
+  Future<void> _loadReviewStatus() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    final doc = await FirebaseFirestore.instance
+        .collection('reviews')
+        .doc('${widget.petId}_${user.uid}')
+        .get();
+    if (mounted) {
+      setState(() => _hasReviewed = doc.exists);
+    }
+  }
+
+  /// Opens the review dialog (star picker + optional comment) and, on
+  /// confirm, files the review.
+  Future<void> _openReviewDialog({
+    required String petTitle,
+    required String ownerUID,
+  }) async {
+    int selectedRating = 0;
+    final commentController = TextEditingController();
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
+          title: const Text('Değerlendirme'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('$petTitle için puan verin:'),
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    for (var i = 1; i <= 5; i++)
+                      IconButton(
+                        icon: Icon(
+                          i <= selectedRating ? Icons.star : Icons.star_border,
+                          color: Colors.amber,
+                          size: 32,
+                        ),
+                        onPressed: () =>
+                            setDialogState(() => selectedRating = i),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: commentController,
+                  maxLength: 500,
+                  maxLines: 3,
+                  decoration: const InputDecoration(
+                    labelText: 'Yorum (opsiyonel)',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Vazgeç'),
+            ),
+            FilledButton(
+              onPressed: selectedRating == 0
+                  ? null
+                  : () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Gönder'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+    await _submitReview(
+      rating: selectedRating,
+      comment: commentController.text.trim(),
+      ownerUID: ownerUID,
+      petTitle: petTitle,
+    );
+  }
+
+  Future<void> _submitReview({
+    required int rating,
+    required String comment,
+    required String ownerUID,
+    required String petTitle,
+  }) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null || _isSubmittingReview) return;
+    setState(() => _isSubmittingReview = true);
+    try {
+      // Resolve the reviewer's display name once so review lists render
+      // without reading every author profile.
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+      final authorName = userDoc.data()?['fullName']?.toString() ??
+          (user.email ?? 'Kullanıcı');
+
+      await FirebaseFirestore.instance
+          .collection('reviews')
+          .doc('${widget.petId}_${user.uid}')
+          .set({
+        'petId': widget.petId,
+        'authorUID': user.uid,
+        'authorName': authorName,
+        'ownerUID': ownerUID,
+        'petTitle': petTitle,
+        'rating': rating,
+        'comment': comment,
+        'createdAt': DateTime.now().toUtc(),
+      });
+      if (mounted) {
+        setState(() => _hasReviewed = true);
+      }
+      _showReportSnack('Değerlendirmeniz kaydedildi. Teşekkürler!', ok: true);
+    } catch (e) {
+      debugPrint('Değerlendirme gönderilemedi: $e');
+      _showReportSnack('Değerlendirme gönderilemedi.', ok: false);
+    } finally {
+      if (mounted) {
+        setState(() => _isSubmittingReview = false);
+      }
+    }
+  }
+
+  /// Every review filed for this pet, newest first.
+  void _openReviewsSheet() {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        final scheme = Theme.of(sheetContext).colorScheme;
+        return SafeArea(
+          child: SizedBox(
+            height: 480,
+            child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+              stream: FirebaseFirestore.instance
+                  .collection('reviews')
+                  .where('petId', isEqualTo: widget.petId)
+                  .limit(20)
+                  .snapshots(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                final docs = snapshot.data?.docs ?? const [];
+                if (docs.isEmpty) {
+                  return Center(
+                    child: Text(
+                      'Henüz değerlendirme yok.',
+                      style: TextStyle(color: scheme.onSurfaceVariant),
+                    ),
+                  );
+                }
+                return ListView.builder(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: docs.length,
+                  itemBuilder: (context, i) {
+                    final data = docs[i].data();
+                    final name = data['authorName']?.toString() ?? 'Kullanıcı';
+                    final rating = (data['rating'] as num?)?.toInt() ?? 0;
+                    final comment = data['comment']?.toString() ?? '';
+                    final created =
+                        (data['createdAt'] as Timestamp?)?.toDate();
+                    return Card(
+                      margin: const EdgeInsets.only(bottom: 10),
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    name,
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                      color: scheme.onSurface,
+                                    ),
+                                  ),
+                                ),
+                                _starRow(rating),
+                              ],
+                            ),
+                            if (comment.isNotEmpty) ...[
+                              const SizedBox(height: 6),
+                              Text(
+                                comment,
+                                style: TextStyle(color: scheme.onSurface),
+                              ),
+                            ],
+                            const SizedBox(height: 6),
+                            Text(
+                              created == null
+                                  ? ''
+                                  : AppFormatters.relativeTimestamp(created),
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: scheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  /// Compact review preview inside the info column: count + average + the
+  /// two latest reviews, with a sheet link for the rest.
+  Widget _buildReviewsSection() {
+    final scheme = Theme.of(context).colorScheme;
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance
+          .collection('reviews')
+          .where('petId', isEqualTo: widget.petId)
+          .limit(25)
+          .snapshots(),
+      builder: (context, snapshot) {
+        final docs = snapshot.data?.docs ?? const [];
+        final ratings = docs
+            .map((d) => (d.data()['rating'] as num?)?.toDouble())
+            .whereType<double>()
+            .toList();
+        final avg = ratings.isEmpty
+            ? 0.0
+            : ratings.reduce((a, b) => a + b) / ratings.length;
+
+        return Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: scheme.surfaceContainerHighest,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.reviews, size: 18, color: scheme.primary),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Değerlendirmeler (${docs.length})',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: scheme.onSurface,
+                    ),
+                  ),
+                  const Spacer(),
+                  if (avg > 0)
+                    Text(
+                      '★ ${avg.toStringAsFixed(1)}',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.amber[800],
+                      ),
+                    ),
+                ],
+              ),
+              if (docs.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Text(
+                    'Henüz değerlendirme yok.',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ),
+                )
+              else ...[
+                const SizedBox(height: 8),
+                for (final doc in docs.take(2))
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                doc.data()['authorName']?.toString() ??
+                                    'Kullanıcı',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: scheme.onSurface,
+                                ),
+                              ),
+                              if ((doc.data()['comment']?.toString() ?? '')
+                                  .isNotEmpty)
+                                Text(
+                                  doc.data()['comment']!.toString(),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: scheme.onSurfaceVariant,
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                        _starRow(
+                          (doc.data()['rating'] as num?)?.toInt() ?? 0,
+                        ),
+                      ],
+                    ),
+                  ),
+                TextButton(
+                  onPressed: _openReviewsSheet,
+                  child: const Text('Tümünü Gör'),
+                ),
+              ],
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _starRow(int rating, {double size = 14}) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (var i = 1; i <= 5; i++)
+          Icon(
+            i <= rating ? Icons.star : Icons.star_border,
+            size: size,
+            color: Colors.amber,
+          ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<DocumentSnapshot<Map<String, dynamic>>>(
@@ -873,6 +1239,8 @@ Future<bool> toggleFavoriteStatus(
                       chip: chip,
                       vaccine: vaccine,
                     ),
+                    const SizedBox(height: 12),
+                    _buildReviewsSection(),
                     const SizedBox(height: 16),
                     ElevatedButton(
                       onPressed: () async {
@@ -968,12 +1336,33 @@ Future<bool> toggleFavoriteStatus(
                               : 'Sahiplenmek İstiyorum',
                         ),
                       ),
+                      const SizedBox(height: 12),
+                      FilledButton.tonalIcon(
+                        onPressed: _hasReviewed || _isSubmittingReview
+                            ? null
+                            : () => _openReviewDialog(
+                                  petTitle: title,
+                                  ownerUID: recipientUID,
+                                ),
+                        icon: Icon(
+                          _hasReviewed ? Icons.rate_review : Icons.star_outline,
+                        ),
+                        label: Text(
+                          _hasReviewed ? 'Değerlendirdiniz' : 'Değerlendir',
+                        ),
+                      ),
                     ] else ...[
                       const SizedBox(height: 16),
                       OutlinedButton.icon(
                         onPressed: () => _openApplicationsSheet(widget.petId),
                         icon: const Icon(Icons.group),
                         label: const Text('Başvurular'),
+                      ),
+                      const SizedBox(height: 12),
+                      OutlinedButton.icon(
+                        onPressed: _openReviewsSheet,
+                        icon: const Icon(Icons.rate_review),
+                        label: const Text('Değerlendirmeler'),
                       ),
                     ],
                   ],

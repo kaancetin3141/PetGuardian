@@ -509,6 +509,69 @@ async function run() {
   await check('admin can read all applications', () =>
     assertSucceeds(adminDb.collection('applications').get()));
 
+  console.log('\n== reviews (listing ratings) ==');
+  // Exact payload written by pet_detail_page.dart _submitReview(). The doc
+  // ID is `<petId>_<authorUid>` so a user can review a pet at most once.
+  const reviewPayload = {
+    petId: 'pet-1',
+    authorUID: 'alice-uid',
+    authorName: 'Alice',
+    ownerUID: 'bob-uid',
+    petTitle: 'Fluffy',
+    rating: 5,
+    comment: 'Saglikli, sakin bir hayvan.',
+    createdAt: new Date(),
+  };
+
+  await check('author can review a listing', () =>
+    assertSucceeds(aliceDb.doc('reviews/pet-1_alice-uid').set(reviewPayload)));
+  await check('review cannot be filed unauthenticated', () =>
+    assertFails(unauth.firestore().doc('reviews/pet-2_eve-uid').set({
+      ...reviewPayload, petId: 'pet-2', authorUID: 'eve-uid',
+    })));
+  await check('authorUID must match the authenticated user', () =>
+    assertFails(aliceDb.doc('reviews/pet-3_eve-uid').set({
+      ...reviewPayload, petId: 'pet-3', authorUID: 'eve-uid',
+    })));
+  await check('owner cannot review their own pet', () =>
+    assertFails(bobDb.doc('reviews/pet-1_bob-uid').set({
+      ...reviewPayload, authorUID: 'bob-uid', ownerUID: 'bob-uid',
+    })));
+  await check('rating below 1 is rejected', () =>
+    assertFails(aliceDb.doc('reviews/pet-4_alice-uid').set({
+      ...reviewPayload, petId: 'pet-4', rating: 0,
+    })));
+  await check('rating above 5 is rejected', () =>
+    assertFails(aliceDb.doc('reviews/pet-5_alice-uid').set({
+      ...reviewPayload, petId: 'pet-5', rating: 6,
+    })));
+  await check('fractional rating is rejected', () =>
+    assertFails(aliceDb.doc('reviews/pet-6_alice-uid').set({
+      ...reviewPayload, petId: 'pet-6', rating: 4.5,
+    })));
+  await check('oversized comment is rejected', () =>
+    assertFails(aliceDb.doc('reviews/pet-7_alice-uid').set({
+      ...reviewPayload, petId: 'pet-7', comment: 'x'.repeat(501),
+    })));
+  await check('review without a comment is allowed', () =>
+    assertSucceeds(aliceDb.doc('reviews/pet-8_alice-uid').set({
+      ...reviewPayload, petId: 'pet-8', comment: '',
+    })));
+
+  await check('any signed-in user can read reviews', () =>
+    assertSucceeds(testEnv.authenticatedContext('carol-uid').firestore()
+      .doc('reviews/pet-1_alice-uid').get()));
+  await check('reviewing again on the same pet is blocked (doc exists)', () =>
+    assertFails(aliceDb.doc('reviews/pet-1_alice-uid').set({
+      ...reviewPayload, rating: 2,
+    })));
+  await check('reviews cannot be updated by anyone', () =>
+    assertFails(aliceDb.doc('reviews/pet-1_alice-uid').update({
+      rating: 1,
+    })));
+  await check('reviews cannot be deleted by anyone', () =>
+    assertFails(bobDb.doc('reviews/pet-1_alice-uid').delete()));
+
   await testEnv.cleanup();
 
   console.log(`\n${passed} passed, ${failed} failed`);

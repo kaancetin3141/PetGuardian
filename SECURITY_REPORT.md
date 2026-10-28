@@ -2,7 +2,7 @@
 
 Tarih: 2026-10-27 · Kapsam: `firestore.rules`, `storage.rules`, `lib/` istemci kodu
 Yöntem: kod denetimi + Firestore emülatörü üzerinde adversaryal senaryolar (`@firebase/rules-unit-testing`)
-Güncelleme: 2026-10-28 — kural seti 88 → **110 assertion**'a çıktı (`reports` + yeni `applications` koleksiyonu); tümü emülatörde yeşil.
+Güncelleme: 2026-10-28 — kural seti 88 → **123 assertion**'a çıktı (`reports` + `applications` + `reviews` koleksiyonları); tümü emülatörde yeşil.
 
 ## Sonuç
 
@@ -40,3 +40,12 @@ Sahiplendirme başvuruları (`applications/<petId>_<applicantUid>`, tek başvuru
 - **update**: yalnızca `pending` durumundan geçiş (owner: `approved`/`declined`; başvuran: `withdrawn`; admin: her ikisi) ve yalnızca triage anahtarları (`status`, `resolvedAt`, `resolvedBy`, `moderatorNote`).
 - **delete**: tüm istemciler için reddedildi (denetim kaydı).
 - Test: 22 assertion — sahte başvuran, kendi ilanına başvuru, boş/uzun mesaj, doğrudan `approved` açılışı, yabancı okuma, başvuranın onay/red denemesi, tamamlanmış kaydın yeniden değişimi, mesaj kurcalama, yabancı triage, silme ve admin okuma.
+
+## reviews koleksiyonu (2026-10-28 ek)
+
+Listeleme değerlendirmeleri (`reviews/<petId>_<authorUid>`, tek değerlendirme/kullanıcı/pet yapısal olarak):
+
+- **create**: yalnızca imzalı kullanıcı; `authorUID == request.auth.uid`; `ownerUID != authorUID` (kendi ilanına değerlendirme yok); puan 1–5 **tam sayı** (kural dili `math.round` ile kesirli puan reddedilir); yorum ≤ 500 karakter; `createdAt` zorunlu.
+- **read**: imzalı herkes (listeleme sayfası ortak veri).
+- **update / delete**: tüm istemciler için reddedildi — değerlendirmeler değiştirilemez; düzenleme/detaylandırma moderasyonu kural dışıdır.
+- Test: 13 assertion — kimliksiz başvuru, sahte yazar, kendi ilanı, 0/6/4.5 puan, aşırı uzun ve boş yorum, yabancı okuma, aynı kayda ikinci yazım, güncelleme ve silme denemeleri.
