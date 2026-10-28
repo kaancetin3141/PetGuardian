@@ -56,7 +56,44 @@ class _ChatListPageState extends State<ChatListPage> {
   final Map<String, _UserInfo> _userCache = <String, _UserInfo>{};
   final Set<String> _pendingUIDs = <String>{};
 
+  /// Uids the signed-in user has blocked, or been blocked by. Rows for these
+  /// conversations show a lock glyph; the message page itself explains the
+  /// state and offers the unblock action.
+  final Set<String> _blockedCounterparts = <String>{};
+
   FirebaseFirestore get _db => widget.firestore ?? FirebaseFirestore.instance;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadBlockedCounterparts();
+  }
+
+  /// Two single-field equality queries (no composite index needed) cover both
+  /// directions; the union is the set of blocked counterparts.
+  Future<void> _loadBlockedCounterparts() async {
+    try {
+      final asBlocker = await _db
+          .collection('blocks')
+          .where('blockerUID', isEqualTo: widget.currentUserUID)
+          .get();
+      final asBlocked = await _db
+          .collection('blocks')
+          .where('blockedUID', isEqualTo: widget.currentUserUID)
+          .get();
+      if (!mounted) return;
+      setState(() {
+        _blockedCounterparts
+          ..addAll(asBlocker.docs
+              .map((d) => d.data()['blockedUID']?.toString() ?? ''))
+          ..addAll(asBlocked.docs
+              .map((d) => d.data()['blockerUID']?.toString() ?? ''))
+          ..remove('');
+      });
+    } catch (e) {
+      debugPrint('Engel durumu yüklenemedi: $e');
+    }
+  }
 
   @override
   void dispose() {
@@ -202,7 +239,11 @@ class _ChatListPageState extends State<ChatListPage> {
           }
 
           return RefreshIndicator(
-            onRefresh: () async => setState(() {}),
+            onRefresh: () async {
+              // Pull-to-refresh re-resolves the block set alongside the
+              // stream's own live updates.
+              await _loadBlockedCounterparts();
+            },
             child: ListView.builder(
               padding: const EdgeInsets.symmetric(vertical: 8),
               itemCount: conversations.length,
@@ -442,6 +483,17 @@ class _ChatListPageState extends State<ChatListPage> {
                 ],
               ),
             ),
+            if (_blockedCounterparts.contains(conversation.otherUID)) ...[
+              const SizedBox(width: 8),
+              Tooltip(
+                message: 'Bu sohbet engellendi',
+                child: Icon(
+                  Icons.block,
+                  size: 16,
+                  color: Theme.of(context).colorScheme.error,
+                ),
+              ),
+            ],
             if (myUnreadCount > 0)
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),

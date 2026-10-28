@@ -2,6 +2,7 @@ import 'package:petguardian/pages/messages/message_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../stuff/app_network_image.dart';
@@ -46,11 +47,11 @@ class _PetDetailPageState extends State<PetDetailPage> {
 
   /// Reason choices offered in the report dialog.
   static const List<String> _reportReasons = [
-    'Misleading or fake listing',
-    'Inappropriate content',
-    'Suspected scam',
-    'Animal mistreatment',
-    'Other',
+    'Yanıltıcı veya sahte ilan',
+    'Uygunsuz içerik',
+    'Dolandırıcılık şüphesi',
+    'Hayvana kötü muamele',
+    'Diğer',
   ];
 
   @override
@@ -99,13 +100,13 @@ class _PetDetailPageState extends State<PetDetailPage> {
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (dialogContext, setDialogState) => AlertDialog(
-          title: const Text('Report listing'),
+          title: const Text('İlanı Bildir'),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Why are you reporting this listing?'),
+                const Text('Bu ilanı neden bildiriyorsunuz?'),
                 const SizedBox(height: 8),
                 // `RadioGroup` owns the selected value so the tiles do not use
                 // the deprecated `groupValue` / `onChanged` pair.
@@ -133,7 +134,7 @@ class _PetDetailPageState extends State<PetDetailPage> {
                   maxLength: 1000,
                   maxLines: 3,
                   decoration: const InputDecoration(
-                    labelText: 'Extra detail (optional)',
+                    labelText: 'Ek detay (opsiyonel)',
                     border: OutlineInputBorder(),
                   ),
                 ),
@@ -143,13 +144,13 @@ class _PetDetailPageState extends State<PetDetailPage> {
           actions: [
             TextButton(
               onPressed: () => Navigator.of(dialogContext).pop(false),
-              child: const Text('Cancel'),
+              child: const Text('Vazgeç'),
             ),
             FilledButton(
               onPressed: chosenReason == null
                   ? null
                   : () => Navigator.of(dialogContext).pop(true),
-              child: const Text('Submit'),
+              child: const Text('Gönder'),
             ),
           ],
         ),
@@ -162,11 +163,33 @@ class _PetDetailPageState extends State<PetDetailPage> {
     detailsController.dispose();
   }
 
+  /// Shares the listing as plain text. share_plus opens the platform share
+  /// sheet on Android/iOS and the Web Share API on web; browsers without
+  /// Web Share support fall back to copying the text to the clipboard.
+  Future<void> _shareListing({
+    required String title,
+    required String kinds,
+  }) async {
+    final text = 'PetGuardian ilanı: $title'
+        '${kinds.isNotEmpty && kinds != 'Bilgi yok' ? ' ($kinds)' : ''} '
+        '— PetGuardian uygulamasından detaylara bakabilirsiniz.';
+    try {
+      await SharePlus.instance.share(ShareParams(text: text));
+    } catch (e) {
+      debugPrint('Paylaşım açılamadı, metin panoya kopyalanıyor: $e');
+      await Clipboard.setData(ClipboardData(text: text));
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('İlan metni panoya kopyalandı.')),
+      );
+    }
+  }
+
   /// Writes a single abuse report against this listing.
   Future<void> _submitReport(String reason, String details) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
-      _showReportSnack('You must sign in to report a listing.', ok: false);
+      _showReportSnack('İlanı bildirmek için oturum açmalısınız.', ok: false);
       return;
     }
     setState(() => _isSubmittingReport = true);
@@ -197,10 +220,10 @@ class _PetDetailPageState extends State<PetDetailPage> {
       if (mounted) {
         setState(() => _hasReported = true);
       }
-      _showReportSnack('Report received. Thank you.', ok: true);
+      _showReportSnack('Bildiriminiz alındı. Teşekkürler.', ok: true);
     } catch (e) {
       debugPrint('Report failed: $e');
-      _showReportSnack('Report could not be sent. Please try again.', ok: false);
+      _showReportSnack('Bildirim gönderilemedi. Lütfen tekrar deneyin.', ok: false);
     } finally {
       if (mounted) {
         setState(() => _isSubmittingReport = false);
@@ -1115,6 +1138,14 @@ Future<bool> toggleFavoriteStatus(
               ),
               actions: [
                 IconButton(
+                  tooltip: 'İlanı Paylaş',
+                  icon: Icon(
+                    Icons.share,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                  onPressed: () => _shareListing(title: title, kinds: kinds),
+                ),
+                IconButton(
                   icon: AnimatedScale(
                     // Little "pop" when the heart fills; settles back when it
                     // empties. Keyed by state so the scale re-runs each toggle.
@@ -1147,8 +1178,8 @@ Future<bool> toggleFavoriteStatus(
                 ),
                 IconButton(
                   tooltip: _hasReported
-                      ? 'You reported this listing'
-                      : 'Report this listing',
+                      ? 'Bu ilanı bildirdiniz'
+                      : 'İlanı bildir',
                   icon: Icon(
                     _hasReported ? Icons.flag : Icons.flag_outlined,
                     color: _hasReported
