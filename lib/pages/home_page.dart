@@ -7,6 +7,7 @@ import 'package:petguardian/pages/account_page.dart';
 import 'package:petguardian/pages/notification_page.dart';
 import 'package:petguardian/pages/pet_detail_page.dart';
 import 'package:petguardian/pages/shop_page.dart';
+import 'package:petguardian/settings/add_pet_page.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -176,6 +177,16 @@ class _HomePageState extends State<HomePage> {
       _sortMode = FeedSortMode.newest;
     });
     filterImages();
+  }
+
+  /// Opens the listing form from the feed's empty state. The previous copy
+  /// pointed users at a top-right menu that has no add-pet entry; this is
+  /// the one-tap fix.
+  void _openAddPetPage() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const AddPetPage()),
+    );
   }
 
   void _showSnack(String message) {
@@ -694,10 +705,13 @@ class _HomePageState extends State<HomePage> {
         title: isSearching ? 'Sonuç bulunamadı' : 'Henüz ilan yok',
         message: isSearching
             ? 'Seçili filtrelerle eşleşen bir pet bulunamadı. Aramayı veya tür seçimini değiştirmeyi deneyin.'
-            : 'İlk pet ilanını ekleyen siz olun! Sağ üstteki menüden pet ekleyebilirsiniz.',
-        // Offer a one-tap reset whenever a filter is actually narrowing the
-        // list; otherwise the button would be a no-op and just add noise.
-        onSecondary: isSearching ? _clearFilters : null,
+            : 'Hesap sayfasından veya aşağıdaki butonla ilk pet ilanını verebilirsiniz.',
+        // When a filter narrows the list, offer a one-tap reset. When the
+        // feed is simply empty, offer a one-tap route to the listing form
+        // (the copy no longer points at a menu item that has no such entry).
+        onSecondary: isSearching ? _clearFilters : _openAddPetPage,
+        secondaryLabel: isSearching ? null : 'İlan Ver',
+        secondaryIcon: isSearching ? Icons.filter_alt_off : Icons.add_circle_outline,
       );
     } else {
       content = RefreshIndicator(
@@ -836,6 +850,7 @@ class _HomePageState extends State<HomePage> {
     VoidCallback? onRetry,
     String? secondaryLabel,
     VoidCallback? onSecondary,
+    IconData? secondaryIcon,
   }) {
     final scheme = Theme.of(context).colorScheme;
     return Center(
@@ -880,7 +895,7 @@ class _HomePageState extends State<HomePage> {
               const SizedBox(height: 12),
               OutlinedButton.icon(
                 onPressed: onSecondary,
-                icon: const Icon(Icons.filter_alt_off),
+                icon: Icon(secondaryIcon ?? Icons.filter_alt_off),
                 label: Text(secondaryLabel ?? 'Filtreleri temizle'),
               ),
             ],

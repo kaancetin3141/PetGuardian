@@ -343,6 +343,66 @@ allow update: if isParticipantOf(resource.data)
       allow delete: if false;
     }
 
+    // ------------------------------------------------------------------
+    // applications/{applicationId}
+    //
+    // Adoption applications ("Sahiplenmek İstiyorum"). The document id is
+    // <petId>_<applicantUid>, so "one application per user per pet" is
+    // structural. Lifecycle: pending -> approved | declined | withdrawn.
+    // ------------------------------------------------------------------
+    match /applications/{applicationId} {
+      function validApplication(data) {
+        return data.petId is string
+          && data.petId.size() > 0
+          && data.applicantUID is string
+          && data.applicantUID == request.auth.uid
+          && data.ownerUID is string
+          && data.ownerUID.size() > 0
+          && data.ownerUID != data.applicantUID
+          && data.message is string
+          && data.message.size() > 0
+          && data.message.size() <= 1000
+          && data.status is string
+          && data.status == 'pending'
+          && data.createdAt is timestamp;
+      }
+
+      // The applicant and the listing owner each read the applications they
+      // are party to; a moderator can triage all of them.
+      allow read: if isSignedIn()
+        && (resource.data.applicantUID == request.auth.uid
+            || resource.data.ownerUID == request.auth.uid
+            || isAdmin());
+
+      allow create: if isSignedIn()
+        && validApplication(request.resource.data);
+
+      function applicationTransition(from, to) {
+        return from == 'pending'
+          && to in ['approved', 'declined', 'withdrawn'];
+      }
+
+      // Only the owner may approve/decline, only the applicant may withdraw
+      // their own pending application, and only the triage fields may move.
+      allow update: if isSignedIn()
+        && resource != null
+        && resource.data.status == 'pending'
+        && applicationTransition(resource.data.status, request.resource.data.status)
+        && (
+             (request.auth.uid == resource.data.applicantUID
+               && request.resource.data.status == 'withdrawn')
+             || (request.auth.uid == resource.data.ownerUID
+               && request.resource.data.status in ['approved', 'declined'])
+             || isAdmin()
+           )
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['status', 'resolvedAt', 'resolvedBy', 'moderatorNote']);
+
+      // Applications are part of the adoption audit trail; clients never
+      // delete them.
+      allow delete: if false;
+    }
+
     // Anything not matched above is denied.
   }
 }

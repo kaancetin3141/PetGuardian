@@ -413,6 +413,102 @@ async function run() {
       status: 'dismissed',
     })));
 
+  console.log('\n== applications (adoption applications) ==');
+  // Exact payload written by pet_detail_page.dart _submitApplication(). The
+  // doc ID is `<petId>_<applicantUid>` so a user can apply at most once per
+  // pet.
+  const applicationPayload = {
+    petId: 'pet-1',
+    applicantUID: 'alice-uid',
+    ownerUID: 'bob-uid',
+    petTitle: 'Fluffy',
+    message: 'Fluffy ile ilgileniyorum, refakatci ev ortamim var.',
+    phone: '02121234567',
+    status: 'pending',
+    createdAt: new Date(),
+  };
+
+  await check('applicant can apply for a pet', () =>
+    assertSucceeds(aliceDb.doc('applications/pet-1_alice-uid').set(applicationPayload)));
+  await check('application cannot be filed unauthenticated', () =>
+    assertFails(unauth.firestore().doc('applications/pet-2_eve-uid').set({
+      ...applicationPayload, petId: 'pet-2', applicantUID: 'eve-uid',
+    })));
+  await check('applicantUID must match the authenticated user', () =>
+    assertFails(aliceDb.doc('applications/pet-3_eve-uid').set({
+      ...applicationPayload, petId: 'pet-3', applicantUID: 'eve-uid',
+    })));
+  await check('owner cannot apply for their own pet', () =>
+    assertFails(bobDb.doc('applications/pet-1_bob-uid').set({
+      ...applicationPayload, applicantUID: 'bob-uid', ownerUID: 'bob-uid',
+    })));
+  await check('application rejects an empty message', () =>
+    assertFails(aliceDb.doc('applications/pet-4_alice-uid').set({
+      ...applicationPayload, petId: 'pet-4', message: '',
+    })));
+  await check('application rejects an oversized message', () =>
+    assertFails(aliceDb.doc('applications/pet-5_alice-uid').set({
+      ...applicationPayload, petId: 'pet-5', message: 'x'.repeat(1001),
+    })));
+  await check('application must open with status pending', () =>
+    assertFails(aliceDb.doc('applications/pet-6_alice-uid').set({
+      ...applicationPayload, petId: 'pet-6', status: 'approved',
+    })));
+
+  // Reads: applicant and owner only.
+  await check('applicant can read their own application', () =>
+    assertSucceeds(aliceDb.doc('applications/pet-1_alice-uid').get()));
+  await check('listing owner can read applications for their pet', () =>
+    assertSucceeds(bobDb.doc('applications/pet-1_alice-uid').get()));
+  await check('another user cannot read a strangers application', () =>
+    assertFails(testEnv.authenticatedContext('carol-uid').firestore()
+      .doc('applications/pet-1_alice-uid').get()));
+
+  // Lifecycle: owner approves/declines, applicant withdraws.
+  await check('owner can approve a pending application', () =>
+    assertSucceeds(bobDb.doc('applications/pet-1_alice-uid').update({
+      status: 'approved', resolvedAt: new Date(), resolvedBy: 'bob-uid',
+    })));
+  await check('resolved application cannot change again', () =>
+    assertFails(bobDb.doc('applications/pet-1_alice-uid').update({
+      status: 'declined',
+    })));
+  await check('applicant can submit another application (pet-7)', () =>
+    assertSucceeds(aliceDb.doc('applications/pet-7_alice-uid').set({
+      ...applicationPayload, petId: 'pet-7',
+    })));
+  await check('applicant cannot approve their own application', () =>
+    assertFails(aliceDb.doc('applications/pet-7_alice-uid').update({
+      status: 'approved',
+    })));
+  await check('applicant cannot decline their own application', () =>
+    assertFails(aliceDb.doc('applications/pet-7_alice-uid').update({
+      status: 'declined',
+    })));
+  await check('applicant can withdraw their own pending application', () =>
+    assertSucceeds(aliceDb.doc('applications/pet-7_alice-uid').update({
+      status: 'withdrawn', resolvedAt: new Date(),
+    })));
+  await check('applicant can submit application (pet-8)', () =>
+    assertSucceeds(aliceDb.doc('applications/pet-8_alice-uid').set({
+      ...applicationPayload, petId: 'pet-8',
+    })));
+  await check('owner cannot rewrite the message via triage', () =>
+    assertFails(bobDb.doc('applications/pet-8_alice-uid').update({
+      message: 'tampered',
+    })));
+  await check('owner triage cannot move status to an unknown value', () =>
+    assertFails(bobDb.doc('applications/pet-8_alice-uid').update({
+      status: 'maybe', resolvedAt: new Date(),
+    })));
+  await check('stranger cannot triage an application', () =>
+    assertFails(testEnv.authenticatedContext('carol-uid').firestore()
+      .doc('applications/pet-8_alice-uid').update({ status: 'declined' })));
+  await check('applications cannot be deleted by anyone', () =>
+    assertFails(bobDb.doc('applications/pet-8_alice-uid').delete()));
+  await check('admin can read all applications', () =>
+    assertSucceeds(adminDb.collection('applications').get()));
+
   await testEnv.cleanup();
 
   console.log(`\n${passed} passed, ${failed} failed`);

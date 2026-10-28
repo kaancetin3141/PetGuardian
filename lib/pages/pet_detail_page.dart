@@ -1,5 +1,6 @@
 import 'package:petguardian/pages/messages/message_page.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -28,6 +29,15 @@ class _PetDetailPageState extends State<PetDetailPage> {
   bool _hasReported = false;
   bool _isSubmittingReport = false;
 
+  // Adoption-application state.
+  //
+  // The application lives at `applications/<petId>_<uid>`, so "one
+  // application per user per pet" is structural. An application can be
+  // filed, then approved/declined by the owner or withdrawn by the
+  // applicant; every transition is enforced by firestore.rules.
+  bool _hasApplied = false;
+  bool _isSubmittingApplication = false;
+
   /// Reason choices offered in the report dialog.
   static const List<String> _reportReasons = [
     'Misleading or fake listing',
@@ -42,6 +52,21 @@ class _PetDetailPageState extends State<PetDetailPage> {
     super.initState();
     loadFavoriteStatus();
     _loadReportStatus();
+    _loadApplicationStatus();
+  }
+
+  /// Checks whether the signed-in user already applied for this pet, so the
+  /// apply action renders in its resolved (already-applied) state.
+  Future<void> _loadApplicationStatus() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    final doc = await FirebaseFirestore.instance
+        .collection('applications')
+        .doc('${widget.petId}_${user.uid}')
+        .get();
+    if (mounted) {
+      setState(() => _hasApplied = doc.exists);
+    }
   }
 
   /// Checks whether the signed-in user already filed a report for this pet, so
@@ -258,6 +283,300 @@ Future<bool> toggleFavoriteStatus(
   }
 
 
+
+  /// Opens the adoption-application dialog and, on confirm, submits the
+  /// application. [petTitle] / [ownerUID] come from the already-loaded pet
+  /// document, so no second read is needed.
+  Future<void> _openApplicationDialog({
+    required String petTitle,
+    required String ownerUID,
+  }) async {
+    final messageController = TextEditingController();
+    final phoneController = TextEditingController();
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
+          title: const Text('Sahiplenme Başvurusu'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '$petTitle için sahiplendirme başvurusu gönderin. '
+                  'İlan sahibi başvurunuzu onaylayabilir veya reddedebilir.',
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: messageController,
+                  maxLength: 1000,
+                  maxLines: 4,
+                  onChanged: (_) => setDialogState(() {}),
+                  decoration: const InputDecoration(
+                    labelText: 'Neden uygun bir yuva olursunuz?',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: phoneController,
+                  keyboardType: TextInputType.phone,
+                  maxLength: 11,
+                  inputFormatters: [
+                    FilteringTextInputFormatter.digitsOnly,
+                    LengthLimitingTextInputFormatter(11),
+                  ],
+                  decoration: const InputDecoration(
+                    labelText: 'Telefon (opsiyonel)',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Vazgeç'),
+            ),
+            FilledButton(
+              onPressed: messageController.text.trim().isEmpty
+                  ? null
+                  : () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Başvuruyu Gönder'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+    await _submitApplication(
+      message: messageController.text.trim(),
+      phone: phoneController.text.trim(),
+      petTitle: petTitle,
+      ownerUID: ownerUID,
+    );
+  }
+
+  Future<void> _submitApplication({
+    required String message,
+    required String phone,
+    required String petTitle,
+    required String ownerUID,
+  }) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null || _isSubmittingApplication) return;
+    setState(() => _isSubmittingApplication = true);
+    try {
+      await FirebaseFirestore.instance
+          .collection('applications')
+          .doc('${widget.petId}_${user.uid}')
+          .set({
+        'petId': widget.petId,
+        'applicantUID': user.uid,
+        'ownerUID': ownerUID,
+        'petTitle': petTitle,
+        'message': message,
+        if (phone.isNotEmpty) 'phone': phone,
+        'status': 'pending',
+        'createdAt': DateTime.now().toUtc(),
+      });
+      if (mounted) {
+        setState(() => _hasApplied = true);
+      }
+      _showReportSnack('Başvurunuz iletildi. İlan sahibi inceleyecek.', ok: true);
+    } catch (e) {
+      debugPrint('Başvuru gönderilemedi: $e');
+      _showReportSnack('Başvuru gönderilemedi. Lütfen tekrar deneyin.', ok: false);
+    } finally {
+      if (mounted) {
+        setState(() => _isSubmittingApplication = false);
+      }
+    }
+  }
+
+  /// Owner view: every application filed for this pet, newest first, with
+  /// approve/decline actions on pending ones.
+  void _openApplicationsSheet(String petId) {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        final scheme = Theme.of(sheetContext).colorScheme;
+        return SafeArea(
+          child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+            stream: FirebaseFirestore.instance
+                .collection('applications')
+                .where('petId', isEqualTo: petId)
+                .orderBy('createdAt', descending: true)
+                .snapshots(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Padding(
+                  padding: EdgeInsets.all(32),
+                  child: Center(child: CircularProgressIndicator()),
+                );
+              }
+              final docs = snapshot.data?.docs ?? const [];
+              return SizedBox(
+                height: 480,
+                child: Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Text(
+                        'Başvurular (${docs.length})',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: scheme.onSurface,
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: docs.isEmpty
+                          ? Center(
+                              child: Text(
+                                'Henüz başvuru yok.',
+                                style: TextStyle(color: scheme.onSurfaceVariant),
+                              ),
+                            )
+                          : ListView.builder(
+                              padding: const EdgeInsets.symmetric(horizontal: 16),
+                              itemCount: docs.length,
+                              itemBuilder: (context, i) {
+                                final d = docs[i].data();
+                                final status = d['status']?.toString() ?? 'pending';
+                                final message = d['message']?.toString() ?? '';
+                                final phone = d['phone']?.toString() ?? '';
+                                return Card(
+                                  margin: const EdgeInsets.only(bottom: 12),
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(12),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Expanded(
+                                              child: Text(
+                                                message,
+                                                maxLines: 3,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ),
+                                            _applicationStatusChip(status, scheme),
+                                          ],
+                                        ),
+                                        if (phone.isNotEmpty) ...[
+                                          const SizedBox(height: 6),
+                                          Row(
+                                            children: [
+                                              Icon(
+                                                Icons.phone,
+                                                size: 14,
+                                                color: scheme.primary,
+                                              ),
+                                              const SizedBox(width: 4),
+                                              Text(
+                                                phone,
+                                                style: TextStyle(
+                                                  fontSize: 13,
+                                                  color: scheme.onSurfaceVariant,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ],
+                                        if (status == 'pending') ...[
+                                          const SizedBox(height: 10),
+                                          Row(
+                                            mainAxisAlignment: MainAxisAlignment.end,
+                                            children: [
+                                              TextButton.icon(
+                                                onPressed: () =>
+                                                    _resolveApplication(
+                                                  docs[i].id,
+                                                  'declined',
+                                                ),
+                                                icon: const Icon(Icons.close),
+                                                label: const Text('Reddet'),
+                                              ),
+                                              const SizedBox(width: 8),
+                                              FilledButton.icon(
+                                                onPressed: () =>
+                                                    _resolveApplication(
+                                                  docs[i].id,
+                                                  'approved',
+                                                ),
+                                                icon: const Icon(Icons.check),
+                                                label: const Text('Onayla'),
+                                              ),
+                                            ],
+                                          ),
+                                        ],
+                                      ],
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _resolveApplication(String docId, String status) async {
+    try {
+      await FirebaseFirestore.instance
+          .collection('applications')
+          .doc(docId)
+          .update({
+        'status': status,
+        'resolvedAt': DateTime.now().toUtc(),
+        'resolvedBy': FirebaseAuth.instance.currentUser?.uid ?? '',
+      });
+      _showReportSnack(
+        status == 'approved' ? 'Başvuru onaylandı.' : 'Başvuru reddedildi.',
+        ok: true,
+      );
+    } catch (e) {
+      debugPrint('Başvuru güncellenemedi: $e');
+      _showReportSnack('Başvuru güncellenemedi.', ok: false);
+    }
+  }
+
+  Widget _applicationStatusChip(String status, ColorScheme scheme) {
+    final (String label, Color bg, Color fg) = switch (status) {
+      'pending' => ('Bekliyor', scheme.tertiaryContainer, scheme.onTertiaryContainer),
+      'approved' => ('Onaylandı', scheme.primaryContainer, scheme.onPrimaryContainer),
+      'declined' => ('Reddedildi', scheme.errorContainer, scheme.onErrorContainer),
+      'withdrawn' => ('Geri çekildi', scheme.surfaceContainerHighest, scheme.onSurfaceVariant),
+      _ => (status, scheme.surfaceContainerHighest, scheme.onSurfaceVariant),
+    };
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(fontSize: 11, color: fg),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -622,6 +941,35 @@ Future<bool> toggleFavoriteStatus(
                         ],
                       ),
                     ),
+                    if (recipientUID !=
+                        (FirebaseAuth.instance.currentUser?.uid ?? '')) ...[
+                      const SizedBox(height: 16),
+                      FilledButton.icon(
+                        onPressed: _hasApplied || _isSubmittingApplication
+                            ? null
+                            : () => _openApplicationDialog(
+                                  petTitle: title,
+                                  ownerUID: recipientUID,
+                                ),
+                        icon: Icon(
+                          _hasApplied
+                              ? Icons.check_circle
+                              : Icons.volunteer_activism,
+                        ),
+                        label: Text(
+                          _hasApplied
+                              ? 'Başvurunuz Alındı'
+                              : 'Sahiplenmek İstiyorum',
+                        ),
+                      ),
+                    ] else ...[
+                      const SizedBox(height: 16),
+                      OutlinedButton.icon(
+                        onPressed: () => _openApplicationsSheet(widget.petId),
+                        icon: const Icon(Icons.group),
+                        label: const Text('Başvurular'),
+                      ),
+                    ],
                   ],
                 ),
               ),
