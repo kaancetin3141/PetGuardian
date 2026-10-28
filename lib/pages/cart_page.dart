@@ -223,20 +223,21 @@ class _CartPageState extends State<CartPage> {
   }
 
   Widget _buildEmptyCart() {
+    final scheme = Theme.of(context).colorScheme;
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(Icons.shopping_cart_outlined, size: 64, color: Colors.grey),
+          Icon(Icons.shopping_cart_outlined, size: 64, color: scheme.onSurfaceVariant),
           const SizedBox(height: 16),
           const Text(
             'Sepetiniz boş',
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 8),
-          const Text(
+          Text(
             'Market bölümünden ürün ekleyebilirsiniz.',
-            style: TextStyle(color: Colors.grey),
+            style: TextStyle(color: scheme.onSurfaceVariant),
           ),
         ],
       ),
@@ -248,7 +249,7 @@ class _CartPageState extends State<CartPage> {
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: Theme.of(context).colorScheme.surfaceContainer,
           boxShadow: [
             BoxShadow(
               color: Colors.grey.withValues(alpha: 0.2),
@@ -287,12 +288,12 @@ class _CartPageState extends State<CartPage> {
                   padding: const EdgeInsets.symmetric(vertical: 14),
                 ),
                 child: _isPlacingOrder
-                    ? const SizedBox(
+                    ? SizedBox(
                         height: 20,
                         width: 20,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
-                          color: Colors.white,
+                          color: Theme.of(context).colorScheme.onPrimary,
                         ),
                       )
                     : const Text('Siparişi Onayla'),

@@ -624,7 +624,7 @@ Future<bool> toggleFavoriteStatus(
                 ),
                 child: IconButton(
                   icon: const Icon(Icons.arrow_back),
-                  color: Colors.white,
+                  color: Theme.of(context).colorScheme.onPrimary,
                   onPressed: () {
                     Navigator.of(context).pop();
                   },
@@ -676,7 +676,7 @@ Future<bool> toggleFavoriteStatus(
                 ),
                 child: IconButton(
                   icon: const Icon(Icons.arrow_back),
-                  color: Colors.white,
+                  color: Theme.of(context).colorScheme.onPrimary,
                   onPressed: () {
                     Navigator.of(context).pop();
                   },
@@ -741,7 +741,7 @@ Future<bool> toggleFavoriteStatus(
                 ),
                 child: IconButton(
                   icon: const Icon(Icons.arrow_back),
-                  color: Colors.white,
+                  color: Theme.of(context).colorScheme.onPrimary,
                   onPressed: () {
                     Navigator.of(context).pop();
                   },
@@ -812,7 +812,7 @@ Future<bool> toggleFavoriteStatus(
                       height: 200,
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(16),
-                        color: Colors.white,
+                        color: Theme.of(context).colorScheme.surfaceContainerHighest,
                       ),
                       child: Hero(
                         // Same tag as the feed thumbnail: the photo grows
@@ -834,7 +834,10 @@ Future<bool> toggleFavoriteStatus(
                         const SizedBox(width: 8),
                         Text(
                           '$locality $administrativeArea $country',
-                          style: const TextStyle(fontSize: 16, color: Colors.black),
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: Theme.of(context).colorScheme.onSurface,
+                          ),
                         ),
                       ],
                     ),
@@ -902,7 +905,7 @@ Future<bool> toggleFavoriteStatus(
                         );
                       },
                       style: ElevatedButton.styleFrom(
-                        foregroundColor: Colors.white,
+                        foregroundColor: Theme.of(context).colorScheme.onPrimary,
                         backgroundColor: Theme.of(context).colorScheme.primary,
                       ),
                       child: const Row(
@@ -930,7 +933,7 @@ Future<bool> toggleFavoriteStatus(
                         );
                       },
                       style: ElevatedButton.styleFrom(
-                        foregroundColor: Colors.white,
+                        foregroundColor: Theme.of(context).colorScheme.onPrimary,
                         backgroundColor: Theme.of(context).colorScheme.primary,
                       ),
                       child: const Row(

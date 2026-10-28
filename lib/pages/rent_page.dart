@@ -79,7 +79,6 @@ Future<void> sendFormData() async {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        backgroundColor:Colors.white38,
         title: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
@@ -127,7 +126,7 @@ Future<void> sendFormData() async {
 
             ListTile(
               leading: Icon(Icons.home_filled,color: Theme.of(context).colorScheme.primary),
-              title: const Text('Barınak',style: TextStyle(fontSize: 17,color: Colors.grey )),
+              title: Text('Barınak',style: TextStyle(fontSize: 17,color: Theme.of(context).colorScheme.onSurfaceVariant )),
               onTap: () {
                 setState(() {
                   isBarinakSelected = true;
@@ -142,7 +141,7 @@ Future<void> sendFormData() async {
             ),
             ListTile(
               leading: Icon(Icons.person,color: Theme.of(context).colorScheme.primary),
-              title: const Text('Bireysel',style: TextStyle(fontSize: 17,color: Colors.grey )),
+              title: Text('Bireysel',style: TextStyle(fontSize: 17,color: Theme.of(context).colorScheme.onSurfaceVariant )),
               onTap: () {
                 setState(() {
                   isBireyselSelected = true;
@@ -157,14 +156,14 @@ Future<void> sendFormData() async {
             ),
             ListTile(
               leading: Icon(Icons.account_box_outlined,color: Theme.of(context).colorScheme.primary,),
-              title: Text('Bakıcı ol',style: TextStyle(fontSize: 17,color: Colors.grey )),
+              title: Text('Bakıcı ol',style: TextStyle(fontSize: 17,color: Theme.of(context).colorScheme.onSurfaceVariant )),
               onTap: () {
                 sendFormData();
               },
             ),
             ListTile(
               leading: Icon(Icons.info,color: Theme.of(context).colorScheme.primary),
-              title: const Text('Bilgi',style: TextStyle(fontSize: 17,color: Colors.grey )),
+              title: Text('Bilgi',style: TextStyle(fontSize: 17,color: Theme.of(context).colorScheme.onSurfaceVariant )),
               onTap: () {
                 setState(() {
                   isBilgiSelected = true;
@@ -177,7 +176,7 @@ Future<void> sendFormData() async {
             ),
             ListTile(
               leading: Icon(Icons.healing,color: Theme.of(context).colorScheme.primary),
-              title: const Text('Veteriner',style: TextStyle(fontSize: 17,color: Colors.grey )),
+              title: Text('Veteriner',style: TextStyle(fontSize: 17,color: Theme.of(context).colorScheme.onSurfaceVariant )),
               onTap: () {
                 setState(() {
                   isVeterinerSelected = true;
@@ -243,7 +242,7 @@ Future<void> sendFormData() async {
                                         );
                                       },
 
-                                      icon: const Icon(Icons.add,color: Colors.red),
+                                      icon: Icon(Icons.add, color: Theme.of(context).colorScheme.primary),
                                     ),
 
                                     const SizedBox(height: 5),
@@ -278,10 +277,7 @@ Future<void> sendFormData() async {
                                     Text('Kısaca Özet: ${bireysel['özet']}'),
                                     Text('Telefon Numarası: ${bireysel['num']}'),
                                     const SizedBox(width: 8),
-                                    ElevatedButton(style: ElevatedButton.styleFrom(
-                                      backgroundColor: Colors.white,
-                                      foregroundColor: Colors.black,
-                                    ),
+                                    ElevatedButton(
                                       onPressed: () {
                                         debugPrint('${bireysel['ad']}  evcil hayvan bakıcılığı için seçildi.');
                                         showDialog(
@@ -344,10 +340,7 @@ Future<void> sendFormData() async {
 
 
                                     const SizedBox(width: 8),
-                                    ElevatedButton.icon(style: ElevatedButton.styleFrom(
-                                      backgroundColor: Colors.white,
-                                      foregroundColor: Colors.black,
-                                    ),
+                                    ElevatedButton.icon(
                                       onPressed: () {
                                         debugPrint('${veteriner['ad']}  ${veteriner['num']} numarası seçildi.');
                                         showDialog(
@@ -372,7 +365,7 @@ Future<void> sendFormData() async {
                                         );
                                       },
 
-                                      icon: const Icon(Icons.phone,color: Colors.red,),
+                                      icon: Icon(Icons.phone, color: Theme.of(context).colorScheme.primary),
                                       label: Text('Telefon Numarası: ${veteriner['num']}' ),
                                     ),
 
@@ -418,7 +411,7 @@ Future<void> sendFormData() async {
                 );
               },
               style: ElevatedButton.styleFrom(
-                foregroundColor: Colors.white,
+                foregroundColor: Theme.of(context).colorScheme.onPrimary,
                 backgroundColor: Theme.of(context).colorScheme.primary,
               ),
               child: const Row(
@@ -437,7 +430,7 @@ Future<void> sendFormData() async {
                 );
               },
               style: ElevatedButton.styleFrom(
-                foregroundColor: Colors.white,
+                foregroundColor: Theme.of(context).colorScheme.onPrimary,
                 backgroundColor: Theme.of(context).colorScheme.primary,
               ),
               child: const Row(
@@ -456,7 +449,7 @@ Future<void> sendFormData() async {
                 );
               },
               style: ElevatedButton.styleFrom(
-                foregroundColor: Colors.white,
+                foregroundColor: Theme.of(context).colorScheme.onPrimary,
                 backgroundColor: Theme.of(context).colorScheme.primary,
               ),
               child: const Row(

@@ -200,7 +200,7 @@ class _AccountPageState extends State<AccountPage> {
             GestureDetector(
               onTap: _pickImage,
               child: CircleAvatar(
-                backgroundColor: Colors.grey,
+                backgroundColor: Theme.of(context).colorScheme.primary,
                 foregroundImage: _imageUrl != null && _imageUrl!.isNotEmpty
                     ? NetworkImage(_imageUrl!)
                     : null,
@@ -254,11 +254,11 @@ class _AccountPageState extends State<AccountPage> {
             ElevatedButton(
               onPressed: _isLoggingOut ? null : _signOut,
               style: ElevatedButton.styleFrom(
-                foregroundColor: Colors.white,
+                foregroundColor: Theme.of(context).colorScheme.onPrimary,
                 backgroundColor: Theme.of(context).colorScheme.primary,
               ),
               child: _isLoggingOut
-                  ? const Row(
+                  ? Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         SizedBox(
@@ -266,7 +266,9 @@ class _AccountPageState extends State<AccountPage> {
                           height: 24,
                           child: CircularProgressIndicator(
                             valueColor:
-                                AlwaysStoppedAnimation<Color>(Colors.white),
+                                AlwaysStoppedAnimation<Color>(
+                              Theme.of(context).colorScheme.onPrimary,
+                            ),
                           ),
                         ),
                         SizedBox(width: 8),
@@ -291,7 +293,7 @@ class _AccountPageState extends State<AccountPage> {
                 );
               },
               style: ElevatedButton.styleFrom(
-                foregroundColor: Colors.white,
+                foregroundColor: Theme.of(context).colorScheme.onPrimary,
                 backgroundColor: Theme.of(context).colorScheme.primary,
               ),
               child: const Text('Evcil Hayvan Ekle'),
@@ -305,7 +307,7 @@ class _AccountPageState extends State<AccountPage> {
                 );
               },
               style: ElevatedButton.styleFrom(
-                foregroundColor: Colors.white,
+                foregroundColor: Theme.of(context).colorScheme.onPrimary,
                 backgroundColor: Theme.of(context).colorScheme.primary,
               ),
               child: const Text('Evcil Hayvanı Sil veya Düzenle'),
@@ -319,7 +321,7 @@ class _AccountPageState extends State<AccountPage> {
                 );
               },
               style: ElevatedButton.styleFrom(
-                foregroundColor: Colors.white,
+                foregroundColor: Theme.of(context).colorScheme.onPrimary,
                 backgroundColor: Theme.of(context).colorScheme.primary,
               ),
               child: const Row(
@@ -348,7 +350,7 @@ class _AccountPageState extends State<AccountPage> {
                   );
                 },
                 style: ElevatedButton.styleFrom(
-                  foregroundColor: Colors.white,
+                  foregroundColor: Theme.of(context).colorScheme.onPrimary,
                   backgroundColor: Theme.of(context).colorScheme.primary,
                 ),
                 child: const Row(
@@ -367,7 +369,7 @@ class _AccountPageState extends State<AccountPage> {
                   );
                 },
                 style: ElevatedButton.styleFrom(
-                  foregroundColor: Colors.white,
+                  foregroundColor: Theme.of(context).colorScheme.onPrimary,
                   backgroundColor: Theme.of(context).colorScheme.primary,
                 ),
                 child: const Row(
@@ -386,7 +388,7 @@ class _AccountPageState extends State<AccountPage> {
                   );
                 },
                 style: ElevatedButton.styleFrom(
-                  foregroundColor: Colors.white,
+                  foregroundColor: Theme.of(context).colorScheme.onPrimary,
                   backgroundColor: Theme.of(context).colorScheme.primary,
                 ),
                 child: const Row(

@@ -381,12 +381,14 @@ class _HomePageState extends State<HomePage> {
                   controller: searchController,
                   decoration: InputDecoration(
                     focusedBorder: OutlineInputBorder(
-                      borderSide: const BorderSide(color: Colors.black),
+                      borderSide: BorderSide(
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
                       borderRadius: BorderRadius.circular(20),
                     ),
                     hintText: 'Arama yapın',
                     filled: true,
-                    fillColor: Colors.white,
+                    fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(30),
                     ),
@@ -960,7 +962,10 @@ class _HomePageState extends State<HomePage> {
         SizedBox(height: 8),
         Text(
           imageInfo.title,
-          style: const TextStyle(fontSize: 16, color: Colors.black),
+          style: TextStyle(
+            fontSize: 16,
+            color: Theme.of(context).colorScheme.onSurface,
+          ),
         ),
         // Distance badge, shown only when both the viewer and the pet
         // have coordinates. Keeps the card informative without cluttering
@@ -995,13 +1000,16 @@ class _HomePageState extends State<HomePage> {
             ),
           ),
         ElevatedButton(
-          style: ElevatedButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.primary),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Theme.of(context).colorScheme.primary,
+            foregroundColor: Theme.of(context).colorScheme.onPrimary,
+          ),
           onPressed: () {
             _onInfoButtonPressed(context, imageInfo);
           },
           child: const Text(
             'Bilgi Al',
-            style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+            style: TextStyle(fontWeight: FontWeight.bold),
           ),
         ),
       ],
@@ -1030,7 +1038,7 @@ class _HomePageState extends State<HomePage> {
     return ElevatedButton(
       onPressed: onPressed,
       style: ElevatedButton.styleFrom(
-        foregroundColor: Colors.white,
+        foregroundColor: Theme.of(context).colorScheme.onPrimary,
         backgroundColor: Theme.of(context).colorScheme.primary,
       ),
       child: Row(

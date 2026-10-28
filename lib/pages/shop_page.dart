@@ -157,7 +157,7 @@ class _ShopPageState extends State<ShopPage> {
                   );
                 },
                 style: ElevatedButton.styleFrom(
-                  foregroundColor: Colors.white,
+                  foregroundColor: Theme.of(context).colorScheme.onPrimary,
                   backgroundColor: Theme.of(context).colorScheme.primary,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8.0),
@@ -243,7 +243,10 @@ class _ShopPageState extends State<ShopPage> {
             const SizedBox(height: 8),
             Text(
               productInfo.title,
-              style: const TextStyle(fontSize: 16, color: Colors.black),
+              style: TextStyle(
+                fontSize: 16,
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
             ),
             const SizedBox(height: 8),
             ElevatedButton(
@@ -284,7 +287,7 @@ class _ShopPageState extends State<ShopPage> {
     return ElevatedButton(
       onPressed: onPressed,
       style: ElevatedButton.styleFrom(
-        foregroundColor: Colors.white,
+        foregroundColor: Theme.of(context).colorScheme.onPrimary,
         backgroundColor: color,
       ),
       child: Row(

@@ -35,27 +35,21 @@ class _NotificationPageState extends State<NotificationPage> {
   Widget build(BuildContext context) {
     if (_currentUserUID == null) {
       return Scaffold(
-        appBar: AppBar(
-          title: Text('Bildirimler'),
-          backgroundColor: Theme.of(context).colorScheme.primary,
-          foregroundColor: Colors.white,
-        ),
+        appBar: AppBar(title: const Text('Bildirimler')),
         body: const Center(child: CircularProgressIndicator()),
       );
     }
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('Bildirimler'),
-        backgroundColor: Theme.of(context).colorScheme.primary,
-        foregroundColor: Colors.white,
+        title: const Text('Bildirimler'),
         elevation: 0,
         actions: [
           TextButton(
             onPressed: _markAllAsRead,
             child: const Text(
               'Tümünü Okundu İşaretle',
-              style: TextStyle(color: Colors.white, fontSize: 13),
+              style: TextStyle(fontSize: 13),
             ),
           ),
         ],
@@ -73,11 +67,16 @@ class _NotificationPageState extends State<NotificationPage> {
           }
 
           if (snapshot.hasError) {
+            final scheme = Theme.of(context).colorScheme;
             return Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(Icons.error_outline, size: 64, color: Colors.grey),
+                  Icon(
+                    Icons.error_outline,
+                    size: 64,
+                    color: scheme.onSurfaceVariant,
+                  ),
                   const SizedBox(height: 16),
                   Text('Bildirimler yüklenemedi: ${snapshot.error}'),
                   const SizedBox(height: 16),
@@ -129,21 +128,21 @@ class _NotificationPageState extends State<NotificationPage> {
             ),
           ),
           const SizedBox(height: 24),
-          const Text(
+          Text(
             'Henüz bildirim yok',
             style: TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.w600,
-              color: Colors.grey,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
           ),
           const SizedBox(height: 8),
-          const Text(
+          Text(
             'Yeni mesaj, sipariş veya sistem\nbildirimleri burada görünecek',
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 14,
-              color: Colors.grey,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
           ),
         ],
@@ -164,16 +163,19 @@ class _NotificationPageState extends State<NotificationPage> {
     Color iconColor;
     Color backgroundColor;
 
+    // Saturated hue for the glyph + a translucent wash for its tile: that
+    // combination survives both light and dark mode, unlike the fixed
+    // blue[50]/grey[100] fills used before.
     switch (type) {
       case 'message':
         notificationIcon = Icons.chat_bubble;
         iconColor = Colors.blue;
-        backgroundColor = Colors.blue[50]!;
+        backgroundColor = Colors.blue.withValues(alpha: 0.15);
         break;
       case 'order':
         notificationIcon = Icons.shopping_bag;
         iconColor = Colors.orange;
-        backgroundColor = Colors.orange[50]!;
+        backgroundColor = Colors.orange.withValues(alpha: 0.15);
         break;
       case 'rental':
         notificationIcon = Icons.pets;
@@ -183,22 +185,24 @@ class _NotificationPageState extends State<NotificationPage> {
       case 'promotion':
         notificationIcon = Icons.local_offer;
         iconColor = Colors.purple;
-        backgroundColor = Colors.purple[50]!;
+        backgroundColor = Colors.purple.withValues(alpha: 0.15);
         break;
       default:
         notificationIcon = Icons.info;
-        iconColor = Colors.grey;
-        backgroundColor = Colors.grey[100]!;
+        iconColor = Theme.of(context).colorScheme.onSurfaceVariant;
+        backgroundColor =
+            Theme.of(context).colorScheme.surfaceContainerHighest;
     }
 
+    final scheme = Theme.of(context).colorScheme;
     return Dismissible(
       key: Key(doc.id),
       direction: DismissDirection.endToStart,
       background: Container(
         alignment: Alignment.centerRight,
         padding: const EdgeInsets.only(right: 20),
-        color: Colors.red,
-        child: const Icon(Icons.delete, color: Colors.white),
+        color: scheme.error,
+        child: Icon(Icons.delete, color: scheme.onError),
       ),
       confirmDismiss: (direction) async {
         return await showDialog(
@@ -213,7 +217,7 @@ class _NotificationPageState extends State<NotificationPage> {
               ),
               TextButton(
                 onPressed: () => Navigator.pop(context, true),
-                child: const Text('Sil', style: TextStyle(color: Colors.red)),
+                child: Text('Sil', style: TextStyle(color: scheme.error)),
               ),
             ],
           ),
@@ -227,9 +231,11 @@ class _NotificationPageState extends State<NotificationPage> {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           decoration: BoxDecoration(
-            color: isRead ? Colors.white : backgroundColor,
+            // Unread rows carry the type's tint; read rows fall back to the
+            // plain surface so the scheme works in dark mode too.
+            color: isRead ? null : backgroundColor,
             border: Border(
-              bottom: BorderSide(color: Colors.grey[200]!),
+              bottom: BorderSide(color: scheme.outlineVariant),
             ),
           ),
           child: Row(
@@ -256,7 +262,7 @@ class _NotificationPageState extends State<NotificationPage> {
                             style: TextStyle(
                               fontSize: 15,
                               fontWeight: isRead ? FontWeight.w500 : FontWeight.bold,
-                              color: Colors.black87,
+                              color: Theme.of(context).colorScheme.onSurface,
                             ),
                           ),
                         ),
@@ -264,7 +270,7 @@ class _NotificationPageState extends State<NotificationPage> {
                           _formatTimestamp(createdAt?.toDate() ?? DateTime.now()),
                           style: TextStyle(
                             fontSize: 11,
-                            color: Colors.grey[500],
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
                           ),
                         ),
                       ],
@@ -274,7 +280,7 @@ class _NotificationPageState extends State<NotificationPage> {
                       body,
                       style: TextStyle(
                         fontSize: 13,
-                        color: Colors.grey[700],
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
