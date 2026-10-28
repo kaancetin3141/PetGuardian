@@ -213,10 +213,10 @@ class _MessagePageState extends State<MessagePage> {
                 children: [
                   Text(
                     recipientFullName,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 17,
                       fontWeight: FontWeight.w600,
-                      color: Colors.white,
+                      color: Theme.of(context).colorScheme.onSurface,
                     ),
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -230,8 +230,8 @@ class _MessagePageState extends State<MessagePage> {
             ),
           ],
         ),
-        backgroundColor: Theme.of(context).colorScheme.primary,
-        foregroundColor: Colors.white,
+        backgroundColor: Theme.of(context).colorScheme.surface,
+        foregroundColor: Theme.of(context).colorScheme.onSurface,
         elevation: 0,
         actions: [
           IconButton(
@@ -279,7 +279,11 @@ class _MessagePageState extends State<MessagePage> {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Icon(Icons.error_outline, size: 64, color: Colors.grey),
+                        Icon(
+                          Icons.error_outline,
+                          size: 64,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
                         const SizedBox(height: 16),
                         Text('Mesajlar yüklenemedi: ${snapshot.error}'),
                         const SizedBox(height: 16),
@@ -345,18 +349,18 @@ class _MessagePageState extends State<MessagePage> {
           const SizedBox(height: 24),
           Text(
             '$recipientFullName ile sohbet başlatın',
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.w500,
-              color: Colors.grey,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
           ),
           const SizedBox(height: 8),
-          const Text(
+          Text(
             'İlk mesajı siz gönderin',
             style: TextStyle(
               fontSize: 14,
-              color: Colors.grey,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
           ),
         ],
@@ -398,7 +402,12 @@ class _MessagePageState extends State<MessagePage> {
       margin: const EdgeInsets.symmetric(vertical: 16),
       child: Row(
         children: [
-          const Expanded(child: Divider(thickness: 0.5, color: Colors.grey)),
+          Expanded(
+            child: Divider(
+              thickness: 0.5,
+              color: Theme.of(context).colorScheme.outlineVariant,
+            ),
+          ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Text(
@@ -406,11 +415,16 @@ class _MessagePageState extends State<MessagePage> {
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w500,
-                color: Colors.grey[600],
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
             ),
           ),
-          const Expanded(child: Divider(thickness: 0.5, color: Colors.grey)),
+          Expanded(
+            child: Divider(
+              thickness: 0.5,
+              color: Theme.of(context).colorScheme.outlineVariant,
+            ),
+          ),
         ],
       ),
     );
@@ -455,7 +469,9 @@ class _MessagePageState extends State<MessagePage> {
               ),
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               decoration: BoxDecoration(
-                color: isMe ? Theme.of(context).colorScheme.primary : Colors.grey[200],
+                color: isMe
+                    ? Theme.of(context).colorScheme.primary
+                    : Theme.of(context).colorScheme.surfaceContainerHighest,
                 borderRadius: BorderRadius.only(
                   topLeft: const Radius.circular(18),
                   topRight: const Radius.circular(18),
@@ -488,7 +504,9 @@ class _MessagePageState extends State<MessagePage> {
                       message.message,
                       style: TextStyle(
                         fontSize: 15,
-                        color: isMe ? Colors.white : Colors.black87,
+                        color: isMe
+                            ? Theme.of(context).colorScheme.onPrimary
+                            : Theme.of(context).colorScheme.onSurface,
                         height: 1.3,
                       ),
                     ),
@@ -501,7 +519,12 @@ class _MessagePageState extends State<MessagePage> {
                         DateFormat('HH:mm').format(message.timestamp),
                         style: TextStyle(
                           fontSize: 10,
-                          color: isMe ? Colors.white70 : Colors.grey[500],
+                          color: isMe
+                              ? Theme.of(context)
+                                  .colorScheme
+                                  .onPrimary
+                                  .withValues(alpha: 0.7)
+                              : Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
                       ),
                       if (isMe) ...[
@@ -509,7 +532,12 @@ class _MessagePageState extends State<MessagePage> {
                         Icon(
                           message.isRead ? Icons.done_all : Icons.done,
                           size: 14,
-                          color: message.isRead ? Colors.blue : Colors.white70,
+                          color: message.isRead
+                              ? Theme.of(context).colorScheme.onPrimary
+                              : Theme.of(context)
+                                  .colorScheme
+                                  .onPrimary
+                                  .withValues(alpha: 0.5),
                         ),
                       ],
                     ],
@@ -610,13 +638,15 @@ class _MessagePageState extends State<MessagePage> {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.orange[50],
+        // Saturated hue + translucent wash: stays legible in dark mode too
+        // (the previous orange[50] fill turned into a glaring light box).
+        color: Colors.orange.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.orange[200]!),
+        border: Border.all(color: Colors.orange.withValues(alpha: 0.4)),
       ),
       child: Row(
         children: [
-          Icon(Icons.shopping_bag, color: Colors.orange[700], size: 24),
+          Icon(Icons.shopping_bag, color: Colors.orange, size: 24),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
@@ -624,7 +654,7 @@ class _MessagePageState extends State<MessagePage> {
               style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w500,
-                color: Colors.orange[800],
+                color: Colors.orange,
               ),
             ),
           ),
@@ -637,7 +667,7 @@ class _MessagePageState extends State<MessagePage> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Theme.of(context).colorScheme.surface,
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.05),
@@ -652,7 +682,8 @@ class _MessagePageState extends State<MessagePage> {
           children: [
             // Attach button
             IconButton(
-              icon: Icon(Icons.attach_file, color: Colors.grey[600]),
+              icon: Icon(Icons.attach_file,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant),
               onPressed: _showAttachmentOptions,
             ),
             // Camera button
@@ -666,7 +697,8 @@ class _MessagePageState extends State<MessagePage> {
                     ),
                   )
                 : IconButton(
-                    icon: Icon(Icons.camera_alt, color: Colors.grey[600]),
+                    icon: Icon(Icons.camera_alt,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant),
                     onPressed: () => _pickAndSendImage(ImageSource.camera),
                   ),
             // Text field
@@ -674,7 +706,7 @@ class _MessagePageState extends State<MessagePage> {
               child: Container(
                 constraints: const BoxConstraints(maxHeight: 120),
                 decoration: BoxDecoration(
-                  color: Colors.grey[100],
+                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
                   borderRadius: BorderRadius.circular(24),
                 ),
                 child: TextField(
@@ -683,7 +715,8 @@ class _MessagePageState extends State<MessagePage> {
                   textCapitalization: TextCapitalization.sentences,
                   decoration: InputDecoration(
                     hintText: 'Mesaj yazın...',
-                    hintStyle: TextStyle(color: Colors.grey[500]),
+                    hintStyle: TextStyle(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant),
                     border: InputBorder.none,
                     contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                   ),
@@ -699,7 +732,10 @@ class _MessagePageState extends State<MessagePage> {
                 shape: BoxShape.circle,
               ),
               child: IconButton(
-                icon: const Icon(Icons.send, color: Colors.white),
+                icon: Icon(
+                  Icons.send,
+                  color: Theme.of(context).colorScheme.onPrimary,
+                ),
                 onPressed: _sendMessage,
               ),
             ),

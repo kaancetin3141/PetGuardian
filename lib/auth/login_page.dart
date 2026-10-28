@@ -219,7 +219,7 @@ class _LoginPageState extends State<LoginPage> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.pets, color: Colors.black),
+                  Icon(Icons.pets, color: Theme.of(context).colorScheme.primary),
                   SizedBox(width: 10.0),
                   Text(
                     'PetGuardian',
@@ -230,7 +230,7 @@ class _LoginPageState extends State<LoginPage> {
                     ),
                   ),
                   SizedBox(width: 10.0),
-                  Icon(Icons.pets, color: Colors.black),
+                  Icon(Icons.pets, color: Theme.of(context).colorScheme.primary),
                 ],
               ),
               SizedBox(height: 100.0),
@@ -245,15 +245,15 @@ class _LoginPageState extends State<LoginPage> {
               const SizedBox(height: 20.0),
               TextFormField(
                 decoration: InputDecoration(
-                  focusedBorder: const OutlineInputBorder(
-                    borderSide: BorderSide(color: Colors.black),
+                  focusedBorder: OutlineInputBorder(
+                    borderSide: BorderSide(color: Theme.of(context).colorScheme.primary),
                   ),
                   labelText: 'E-posta',
-                  labelStyle: const TextStyle(color: Colors.grey),
+                  labelStyle: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  prefixIcon: const Icon(Icons.mail, color: Colors.grey),
+                  prefixIcon: Icon(Icons.mail, color: Theme.of(context).colorScheme.onSurfaceVariant),
                 ),
                 validator: (value) {
                   if (value!.isEmpty) {
@@ -269,15 +269,15 @@ class _LoginPageState extends State<LoginPage> {
               TextFormField(
                 obscureText: obscurePassword,
                 decoration: InputDecoration(
-                  focusedBorder: const OutlineInputBorder(
-                    borderSide: BorderSide(color: Colors.black),
+                  focusedBorder: OutlineInputBorder(
+                    borderSide: BorderSide(color: Theme.of(context).colorScheme.primary),
                   ),
                   labelText: 'Şifre',
-                  labelStyle: const TextStyle(color: Colors.grey),
+                  labelStyle: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  prefixIcon: const Icon(Icons.lock, color: Colors.grey),
+                  prefixIcon: Icon(Icons.lock, color: Theme.of(context).colorScheme.onSurfaceVariant),
                   suffixIcon: GestureDetector(
                     onTap: () {
                       setState(() {
@@ -286,7 +286,7 @@ class _LoginPageState extends State<LoginPage> {
                     },
                     child: Icon(
                       obscurePassword ? Icons.visibility_off : Icons.visibility,
-                      color: Colors.grey,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
                   ),
                 ),
@@ -321,15 +321,15 @@ class _LoginPageState extends State<LoginPage> {
                                     TextFormField(
                                       controller: _emailController,
                                       decoration: InputDecoration(
-                                        focusedBorder: const OutlineInputBorder(
-                                          borderSide: BorderSide(color: Colors.black),
+                                        focusedBorder: OutlineInputBorder(
+                                          borderSide: BorderSide(color: Theme.of(context).colorScheme.primary),
                                         ),
                                         labelText: 'E-posta Adresinizi Girin',
-                                        labelStyle: const TextStyle(color: Colors.grey),
+                                        labelStyle: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
                                         border: OutlineInputBorder(
                                           borderRadius: BorderRadius.circular(10),
                                         ),
-                                        prefixIcon: const Icon(Icons.mail, color: Colors.grey),
+                                        prefixIcon: Icon(Icons.mail, color: Theme.of(context).colorScheme.onSurfaceVariant),
                                       ),
                                     ),
                                     const SizedBox(height: 10.0),

@@ -279,19 +279,23 @@ class _SignupPageState extends State<SignupPage> {
                   ],
                 ),
                 const SizedBox(height: 10),
-                const Row(
+                Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.pets, color: Colors.black),
+                    Icon(
+                        Icons.pets,
+                        color: Theme.of(context).colorScheme.primary),
                     Text(
                       'BİLGİLERİNİZİ GİRİNİZ',
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
-                        color: Colors.black,
+                        color: Theme.of(context).colorScheme.onSurface,
                       ),
                     ),
-                    Icon(Icons.pets, color: Colors.black),
+                    Icon(
+                        Icons.pets,
+                        color: Theme.of(context).colorScheme.primary),
                   ],
                 ),
                 const SizedBox(height: 20),
@@ -308,12 +312,12 @@ class _SignupPageState extends State<SignupPage> {
                       email = value!.trim();
                     },
                     decoration: InputDecoration(
-                      focusedBorder: const OutlineInputBorder(
-                        borderSide: BorderSide(color: Colors.black),
+                      focusedBorder: OutlineInputBorder(
+                        borderSide: BorderSide(color: Theme.of(context).colorScheme.primary),
                       ),
                       labelText: 'E-posta',
-                      labelStyle: const TextStyle(color: Colors.grey),
-                      prefixIcon: const Icon(Icons.email, color: Colors.grey),
+                      labelStyle: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+                      prefixIcon: Icon(Icons.email, color: Theme.of(context).colorScheme.onSurfaceVariant),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
                       ),
@@ -334,12 +338,12 @@ class _SignupPageState extends State<SignupPage> {
                       displayName = value!.trim();
                     },
                     decoration: InputDecoration(
-                      focusedBorder: const OutlineInputBorder(
-                        borderSide: BorderSide(color: Colors.black),
+                      focusedBorder: OutlineInputBorder(
+                        borderSide: BorderSide(color: Theme.of(context).colorScheme.primary),
                       ),
                       labelText: 'Kullanıcı Adı',
-                      labelStyle: const TextStyle(color: Colors.grey),
-                      prefixIcon: const Icon(Icons.person, color: Colors.grey),
+                      labelStyle: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+                      prefixIcon: Icon(Icons.person, color: Theme.of(context).colorScheme.onSurfaceVariant),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
                       ),
@@ -352,15 +356,15 @@ class _SignupPageState extends State<SignupPage> {
                   child: TextFormField(
                     obscureText: obscurePassword,
                     decoration: InputDecoration(
-                      focusedBorder: const OutlineInputBorder(
-                        borderSide: BorderSide(color: Colors.black),
+                      focusedBorder: OutlineInputBorder(
+                        borderSide: BorderSide(color: Theme.of(context).colorScheme.primary),
                       ),
                       labelText: 'Şifre',
-                      labelStyle: const TextStyle(color: Colors.grey),
+                      labelStyle: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
                       ),
-                      prefixIcon: const Icon(Icons.lock, color: Colors.grey),
+                      prefixIcon: Icon(Icons.lock, color: Theme.of(context).colorScheme.onSurfaceVariant),
                       suffixIcon: GestureDetector(
                         onTap: () {
                           setState(() {
@@ -369,7 +373,7 @@ class _SignupPageState extends State<SignupPage> {
                         },
                         child: Icon(
                           obscurePassword ? Icons.visibility_off : Icons.visibility,
-                          color: Colors.grey,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
                       ),
                     ),
@@ -398,12 +402,12 @@ class _SignupPageState extends State<SignupPage> {
                       fullName = value!.trim();
                     },
                     decoration: InputDecoration(
-                      focusedBorder: const OutlineInputBorder(
-                        borderSide: BorderSide(color: Colors.black),
+                      focusedBorder: OutlineInputBorder(
+                        borderSide: BorderSide(color: Theme.of(context).colorScheme.primary),
                       ),
                       labelText: 'İsim Soyisim',
-                      labelStyle: const TextStyle(color: Colors.grey),
-                      prefixIcon: const Icon(Icons.person, color: Colors.grey),
+                      labelStyle: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+                      prefixIcon: Icon(Icons.person, color: Theme.of(context).colorScheme.onSurfaceVariant),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
                       ),
@@ -427,12 +431,12 @@ class _SignupPageState extends State<SignupPage> {
                       phoneNumber = value!.trim();
                     },
                     decoration: InputDecoration(
-                      focusedBorder: const OutlineInputBorder(
-                        borderSide: BorderSide(color: Colors.black),
+                      focusedBorder: OutlineInputBorder(
+                        borderSide: BorderSide(color: Theme.of(context).colorScheme.primary),
                       ),
                       labelText: 'Telefon Numarası',
-                      labelStyle: const TextStyle(color: Colors.grey),
-                      prefixIcon: const Icon(Icons.phone, color: Colors.grey),
+                      labelStyle: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+                      prefixIcon: Icon(Icons.phone, color: Theme.of(context).colorScheme.onSurfaceVariant),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
                       ),
@@ -466,11 +470,11 @@ class _SignupPageState extends State<SignupPage> {
                         shadowColor: Theme.of(context).colorScheme.primary,
                         backgroundColor: Theme.of(context).colorScheme.primary,
                       ),
-                      child: const Text(
+                      child: Text(
                         'KAYIT OL',
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
-                          color: Colors.white,
+                          color: Theme.of(context).colorScheme.onPrimary,
                         ),
                       ),
                     ),
@@ -497,11 +501,11 @@ class _SignupPageState extends State<SignupPage> {
                       MaterialPageRoute(builder: (context) => const LoginPage()),
                     );
                   },
-                  child: const Text(
+                  child: Text(
                     'GERİ DÖN',
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
-                      color: Colors.white,
+                      color: Theme.of(context).colorScheme.onPrimary,
                     ),
                   ),
                 ),

@@ -88,11 +88,12 @@ class _MapScreenState extends State<MapScreen> {
               controller: _searchController,
               decoration: InputDecoration(
                 focusedBorder: OutlineInputBorder(
-                    borderSide: const BorderSide(color: Colors.black),
+                    borderSide:
+                        BorderSide(color: Theme.of(context).colorScheme.primary),
                     borderRadius: BorderRadius.circular(20)),
                 hintText: 'Adres Ara',
                 filled: true,
-                fillColor: Colors.white,
+                fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
                 border:
                     OutlineInputBorder(borderRadius: BorderRadius.circular(30)),
                 contentPadding: const EdgeInsets.symmetric(vertical: 10),

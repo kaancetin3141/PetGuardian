@@ -43,7 +43,7 @@ class SettingsPage extends StatelessWidget {
             ElevatedButton(
               onPressed: () => _changePassword(context),
               style: ElevatedButton.styleFrom(
-                foregroundColor: Colors.white,
+                foregroundColor: Theme.of(context).colorScheme.onPrimary,
                 backgroundColor: Theme.of(context).colorScheme.primary,
               ),
               child: const Text('Şifreyi Değiştir'),
@@ -52,7 +52,7 @@ class SettingsPage extends StatelessWidget {
             ElevatedButton(
               onPressed: () => _updateUserProfile(context),
               style: ElevatedButton.styleFrom(
-                foregroundColor: Colors.white,
+                foregroundColor: Theme.of(context).colorScheme.onPrimary,
                 backgroundColor: Theme.of(context).colorScheme.primary,
               ),
               child: const Text('Profil Bilgilerini Güncelle'),
@@ -61,7 +61,7 @@ class SettingsPage extends StatelessWidget {
             ElevatedButton(
               onPressed: () => _seeFavoritePets(context),
               style: ElevatedButton.styleFrom(
-                foregroundColor: Colors.white,
+                foregroundColor: Theme.of(context).colorScheme.onPrimary,
                 backgroundColor: Theme.of(context).colorScheme.primary,
               ),
               child: const Text('Favori Evcil Hayvanları Gör'),
@@ -75,7 +75,7 @@ class SettingsPage extends StatelessWidget {
                 );
               },
               style: ElevatedButton.styleFrom(
-                foregroundColor: Colors.white,
+                foregroundColor: Theme.of(context).colorScheme.onPrimary,
                 backgroundColor: Theme.of(context).colorScheme.primary,
               ),
               child: const Text('Geri Dön'),
@@ -177,7 +177,7 @@ class SettingsPage extends StatelessWidget {
                 }
               },
               style: ElevatedButton.styleFrom(
-                foregroundColor: Colors.white,
+                foregroundColor: Theme.of(context).colorScheme.onPrimary,
                 backgroundColor: Theme.of(context).colorScheme.primary,
               ),
               child: const Text('Değiştir'),
@@ -313,7 +313,7 @@ final formKey = GlobalKey<FormState>();
                 }
               },
               style: ElevatedButton.styleFrom(
-                foregroundColor: Colors.white,
+                foregroundColor: Theme.of(context).colorScheme.onPrimary,
                 backgroundColor: Theme.of(context).colorScheme.primary,
               ),
               child: const Text('Güncelle'),

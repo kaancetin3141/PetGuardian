@@ -67,7 +67,7 @@ class _DeletePetPageState extends State<DeletePetPage> {
           ),
           child: IconButton(
             icon: const Icon(Icons.arrow_back),
-            color: Colors.white,
+            color: Theme.of(context).colorScheme.onPrimary,
             onPressed: () {
               Navigator.of(context).pop();
             },
@@ -132,7 +132,7 @@ class _DeletePetPageState extends State<DeletePetPage> {
               );
             },
             style: ElevatedButton.styleFrom(
-              foregroundColor: Colors.white,
+              foregroundColor: Theme.of(context).colorScheme.onPrimary,
               backgroundColor: Theme.of(context).colorScheme.primary,
             ),
             child: const Text('Silinen Hayvanlar'),

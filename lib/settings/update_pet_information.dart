@@ -211,11 +211,11 @@ class _UpdatePetInformationState extends State<UpdatePetInformation> {
     return TextField(
       controller: controller,
       decoration: InputDecoration(
-        focusedBorder: const OutlineInputBorder(
-          borderSide: BorderSide(color: Colors.black),
+        focusedBorder: OutlineInputBorder(
+          borderSide: BorderSide(color: Theme.of(context).colorScheme.primary),
         ),
         labelText: labelText,
-        labelStyle: const TextStyle(color: Colors.black),
+        labelStyle: TextStyle(color: Theme.of(context).colorScheme.onSurface),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
         ),
@@ -241,26 +241,25 @@ class _UpdatePetInformationState extends State<UpdatePetInformation> {
   Widget _buildLocationButton() {
     return ElevatedButton.icon(
       style: ElevatedButton.styleFrom(
-        backgroundColor: const Color.fromARGB(249, 238, 28, 98),
+        backgroundColor: Theme.of(context).colorScheme.primary,
+        foregroundColor: Theme.of(context).colorScheme.onPrimary,
         padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 30),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(10),
         ),
       ),
       onPressed: _isUpdating || _isLoadingMap ? null : _selectLocation,
-      icon: const Icon(Icons.location_on, color: Colors.white),
+      icon: const Icon(Icons.location_on),
       label: _isLoadingMap
           ? const SizedBox(
         width: 24,
         height: 24,
         child: CircularProgressIndicator(
           strokeWidth: 2,
-          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
         ),
       )
           : const Text(
         'Konum Seç',
-        style: TextStyle(color: Colors.white),
       ),
     );
   }
@@ -296,10 +295,10 @@ class _UpdatePetInformationState extends State<UpdatePetInformation> {
       decoration: InputDecoration(
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: Colors.black),
+          borderSide: BorderSide(color: Theme.of(context).colorScheme.primary),
         ),
         labelText: labelText,
-        labelStyle: const TextStyle(color: Colors.black),
+        labelStyle: TextStyle(color: Theme.of(context).colorScheme.onSurface),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
         ),
@@ -310,7 +309,7 @@ class _UpdatePetInformationState extends State<UpdatePetInformation> {
   DropdownMenuItem<String> _buildDropdownMenuItem(String value) {
     return DropdownMenuItem<String>(
       value: value,
-      child: Text(value, style: const TextStyle(color: Colors.black)),
+      child: Text(value, style: TextStyle(color: Theme.of(context).colorScheme.onSurface)),
     );
   }
 

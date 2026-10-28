@@ -158,9 +158,7 @@ class _ChatListPageState extends State<ChatListPage> {
         titleSpacing: 0,
         title: _isSearching
             ? _buildSearchField()
-            : Text('Mesajlar'),
-        backgroundColor: Theme.of(context).colorScheme.primary,
-        foregroundColor: Colors.white,
+            : const Text('Mesajlar'),
         elevation: 0,
         actions: [
           if (!_isSearching)
@@ -218,6 +216,7 @@ class _ChatListPageState extends State<ChatListPage> {
   }
 
   Widget _buildSearchField() {
+    final scheme = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.only(right: 8),
       child: TextField(
@@ -225,20 +224,20 @@ class _ChatListPageState extends State<ChatListPage> {
         autofocus: true,
         onChanged: _onQueryChanged,
         textInputAction: TextInputAction.search,
-        style: const TextStyle(color: Colors.white, fontSize: 16),
-        cursorColor: Colors.white,
+        style: TextStyle(color: scheme.onSurface, fontSize: 16),
+        cursorColor: scheme.primary,
         decoration: InputDecoration(
           hintText: 'İsim veya mesaj ara...',
-          hintStyle: const TextStyle(color: Colors.white70),
-          prefixIcon: const Icon(Icons.search, color: Colors.white),
+          hintStyle: TextStyle(color: scheme.onSurfaceVariant),
+          prefixIcon: Icon(Icons.search, color: scheme.onSurfaceVariant),
           border: InputBorder.none,
           suffixIcon: _query.isEmpty
               ? IconButton(
-                  icon: const Icon(Icons.close, color: Colors.white),
+                  icon: Icon(Icons.close, color: scheme.onSurfaceVariant),
                   onPressed: _closeSearch,
                 )
               : IconButton(
-                  icon: const Icon(Icons.clear, color: Colors.white),
+                  icon: Icon(Icons.clear, color: scheme.onSurfaceVariant),
                   onPressed: () {
                     _searchController.clear();
                     _onQueryChanged('');
@@ -254,7 +253,11 @@ class _ChatListPageState extends State<ChatListPage> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(Icons.error_outline, size: 64, color: Colors.grey),
+          Icon(
+            Icons.error_outline,
+            size: 64,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
           const SizedBox(height: 16),
           Text('Hata oluştu: $error'),
           const SizedBox(height: 16),
@@ -285,21 +288,21 @@ class _ChatListPageState extends State<ChatListPage> {
             ),
           ),
           const SizedBox(height: 24),
-          const Text(
+          Text(
             'Henüz sohbet yok',
             style: TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.w600,
-              color: Colors.grey,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
           ),
           const SizedBox(height: 8),
-          const Text(
+          Text(
             'Yeni bir sohbet başlatmak için\nbir kullanıcı profiline gidin',
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 14,
-              color: Colors.grey,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
           ),
         ],
@@ -312,12 +315,19 @@ class _ChatListPageState extends State<ChatListPage> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(Icons.search_off, size: 64, color: Colors.grey),
+          Icon(
+            Icons.search_off,
+            size: 64,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
           const SizedBox(height: 16),
           Text(
             '"$_query" için sonuç bulunamadı',
             textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 16, color: Colors.grey),
+            style: TextStyle(
+              fontSize: 16,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
           ),
           const SizedBox(height: 16),
           OutlinedButton.icon(
@@ -353,9 +363,8 @@ class _ChatListPageState extends State<ChatListPage> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
-          color: Colors.white,
           border: Border(
-            bottom: BorderSide(color: Colors.grey[200]!),
+            bottom: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
           ),
         ),
         child: Row(
@@ -387,10 +396,10 @@ class _ChatListPageState extends State<ChatListPage> {
                       Expanded(
                         child: Text(
                           info.fullName,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
-                            color: Colors.black87,
+                            color: Theme.of(context).colorScheme.onSurface,
                           ),
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -400,7 +409,7 @@ class _ChatListPageState extends State<ChatListPage> {
                         _formatTimestamp(conversation.lastMessageTimestamp?.toDate() ?? DateTime.now()),
                         style: TextStyle(
                           fontSize: 12,
-                          color: Colors.grey[500],
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
                       ),
                     ],
@@ -410,7 +419,9 @@ class _ChatListPageState extends State<ChatListPage> {
                     children: [
                       if (_typeIcon(conversation.lastMessageType)
                           case final IconData icon)
-                        Icon(icon, size: 14, color: Colors.grey[500]),
+                        Icon(icon,
+                            size: 14,
+                            color: Theme.of(context).colorScheme.onSurfaceVariant),
                       if (conversation.lastMessageType != 'text') const SizedBox(width: 4),
                       Expanded(
                         child: Text(
@@ -419,7 +430,7 @@ class _ChatListPageState extends State<ChatListPage> {
                               : _getMessageTypeLabel(conversation.lastMessageType),
                           style: TextStyle(
                             fontSize: 14,
-                            color: Colors.grey[600],
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
                             fontWeight: myUnreadCount > 0 ? FontWeight.w500 : FontWeight.normal,
                           ),
                           overflow: TextOverflow.ellipsis,
@@ -441,10 +452,10 @@ class _ChatListPageState extends State<ChatListPage> {
                 constraints: const BoxConstraints(minWidth: 24),
                 child: Text(
                   myUnreadCount > 99 ? '99+' : myUnreadCount.toString(),
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.bold,
-                    color: Colors.white,
+                    color: Theme.of(context).colorScheme.onPrimary,
                   ),
                   textAlign: TextAlign.center,
                 ),
@@ -462,7 +473,7 @@ class _ChatListPageState extends State<ChatListPage> {
         children: [
           CircleAvatar(
             radius: 28,
-            backgroundColor: Colors.grey[200],
+            backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -472,13 +483,13 @@ class _ChatListPageState extends State<ChatListPage> {
                 Container(
                   height: 16,
                   width: 100,
-                  color: Colors.grey[200],
+                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
                 ),
                 const SizedBox(height: 4),
                 Container(
                   height: 14,
                   width: 150,
-                  color: Colors.grey[200],
+                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
                 ),
               ],
             ),

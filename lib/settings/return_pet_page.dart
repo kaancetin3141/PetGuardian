@@ -61,7 +61,7 @@ class _ReturnPetPageState extends State<ReturnPetPage> {
           ),
           child: IconButton(
             icon: const Icon(Icons.arrow_back),
-            color: Colors.white,
+            color: Theme.of(context).colorScheme.onPrimary,
             onPressed: () {
               Navigator.of(context).pop();
             },
