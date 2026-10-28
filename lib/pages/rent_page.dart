@@ -75,6 +75,35 @@ Future<void> sendFormData() async {
   }
 
 
+  /// Opens the dialer for the selected bakıcı/klinik. `tel:` is not
+  /// supported by web browsers; the fallback snackbar surfaces the number so
+  /// the user can still dial it manually. Spaces inside the stored numbers
+  /// are stripped because some dialers reject them.
+  Future<void> _dialNumber(String name, String phone) async {
+    final digits = phone.replaceAll(RegExp(r'\s'), '');
+    if (digits.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Bu kayıt için telefon numarası yok.')),
+      );
+      return;
+    }
+
+    final call = Uri(scheme: 'tel', path: digits);
+    var launched = false;
+    try {
+      launched = await launchUrl(call);
+    } catch (e) {
+      debugPrint('Arama başlatılamadı: $e');
+    }
+
+    if (launched || !mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Arama uygulaması açılamadı. $name numarası: $phone'),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -279,31 +308,14 @@ Future<void> sendFormData() async {
                                     const SizedBox(width: 8),
                                     ElevatedButton(
                                       onPressed: () {
-                                        debugPrint('${bireysel['ad']}  evcil hayvan bakıcılığı için seçildi.');
-                                        showDialog(
-                                          context: context,
-                                          builder: (BuildContext context) {
-                                            return AlertDialog(
-                                              title: const Text(
-                                                  'Bireysel Evcil Hayvan Bakıcılığı Seçimi'),
-                                              content: Text(
-                                                  '${bireysel['ad']}  ${bireysel['num']}  evcil hayvan bakıcılığı için seçildi.'),
-                                              actions: <Widget>[
-                                                TextButton(
-                                                  onPressed: () {
-                                                    Navigator.of(context)
-                                                        .pop();
-                                                  },
-                                                  child: const Text('Tamam'),
-                                                ),
-                                              ],
-                                            );
-                                          },
+                                        _dialNumber(
+                                          bireysel['ad']?.toString() ?? '',
+                                          bireysel['num']?.toString() ?? '',
                                         );
                                       },
 
 
-                                      child:  const Icon(Icons.add,color: Colors.red,),
+                                      child:  Icon(Icons.phone,color: Theme.of(context).colorScheme.primary),
 
                                     ),
 
@@ -342,26 +354,9 @@ Future<void> sendFormData() async {
                                     const SizedBox(width: 8),
                                     ElevatedButton.icon(
                                       onPressed: () {
-                                        debugPrint('${veteriner['ad']}  ${veteriner['num']} numarası seçildi.');
-                                        showDialog(
-                                          context: context,
-                                          builder: (BuildContext context) {
-                                            return AlertDialog(
-                                              title: const Text(
-                                                  'Veteriner seçimi'),
-                                              content: Text(
-                                                  '${veteriner['ad']} ${veteriner['num']} seçildi. '),
-                                              actions: <Widget>[
-                                                TextButton(
-                                                  onPressed: () {
-                                                    Navigator.of(context)
-                                                        .pop();
-                                                  },
-                                                  child: const Text('Tamam'),
-                                                ),
-                                              ],
-                                            );
-                                          },
+                                        _dialNumber(
+                                          veteriner['ad']?.toString() ?? '',
+                                          veteriner['num']?.toString() ?? '',
                                         );
                                       },
 
