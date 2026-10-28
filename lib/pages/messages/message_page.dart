@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:intl/intl.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:petguardian/pages/pet_detail_page.dart';
 import 'package:petguardian/services/firebase_messaging_service.dart';
 import 'package:petguardian/stuff/formatters.dart';
+import '../../settings/map_screen.dart';
 import '../../stuff/app_network_image.dart';
 
 class ChatMessage {
@@ -564,9 +568,7 @@ class _MessagePageState extends State<MessagePage> {
 
   Widget _buildImageMessage(String imageUrl) {
     return GestureDetector(
-      onTap: () {
-        // TODO: Full screen image viewer
-      },
+      onTap: () => _openImageViewer(imageUrl),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(12),
         child: AppNetworkImage(
@@ -580,58 +582,273 @@ class _MessagePageState extends State<MessagePage> {
     );
   }
 
+  /// Full-screen, pinch-zoomable view of a shared chat image.
+  void _openImageViewer(String imageUrl) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        fullscreenDialog: true,
+        builder: (viewerContext) => Scaffold(
+          backgroundColor: Colors.black,
+          appBar: AppBar(
+            backgroundColor: Colors.black,
+            foregroundColor: Colors.white,
+            elevation: 0,
+          ),
+          body: Center(
+            child: InteractiveViewer(
+              maxScale: 5,
+              child: AppNetworkImage(url: imageUrl, fit: BoxFit.contain),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildLocationMessage(String locationData) {
+    final coords = _parseLocationPayload(locationData);
+    final scheme = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.blue[50],
+        // Saturated hue + translucent wash stays legible in dark mode (the
+        // previous blue[50] fill turned into a glaring light box).
+        color: Colors.blue.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.blue[200]!),
+        border: Border.all(color: Colors.blue.withValues(alpha: 0.4)),
       ),
       child: Row(
         children: [
-          Icon(Icons.location_on, color: Colors.blue[700], size: 24),
+          Icon(Icons.location_on, color: Colors.blue, size: 24),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
-              '📍 Konum paylaşıldı',
+              coords == null
+                  ? '📍 Konum paylaşıldı'
+                  : '📍 ${coords.$1.toStringAsFixed(5)}, '
+                      '${coords.$2.toStringAsFixed(5)}',
               style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w500,
-                color: Colors.blue[800],
+                color: scheme.onSurface,
               ),
             ),
           ),
+          if (coords != null)
+            TextButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => MapScreen(
+                      initialLocation: LatLng(coords.$1, coords.$2),
+                    ),
+                  ),
+                );
+              },
+              child: const Text('Haritada Aç'),
+            ),
         ],
       ),
     );
   }
 
-  Widget _buildPetCardMessage(String petData) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.primaryContainer,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Theme.of(context).colorScheme.primary),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.pets, color: Theme.of(context).colorScheme.primary, size: 24),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              '🐾 Hayvan kartı paylaşıldı',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: Theme.of(context).colorScheme.primary,
-              ),
+  /// Parses the `"<lat>,<lng>"` payload written by _sendLocation(). Messages
+  /// sent by older clients carry no coordinates and render as plain text.
+  (double, double)? _parseLocationPayload(String payload) {
+    final parts = payload.split(',');
+    if (parts.length != 2) return null;
+    final lat = double.tryParse(parts[0].trim());
+    final lng = double.tryParse(parts[1].trim());
+    if (lat == null || lng == null) return null;
+    return (lat, lng);
+  }
+
+  Widget _buildPetCardMessage(String petId) {
+    // The card fetches the listing live: if it was deleted after being
+    // shared, the message degrades to a muted "no longer available" chip
+    // instead of a dead button.
+    return FutureBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+      future: FirebaseFirestore.instance.collection('pets').doc(petId).get(),
+      builder: (context, snapshot) {
+        final scheme = Theme.of(context).colorScheme;
+        final data = snapshot.data?.data();
+
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return Container(
+            height: 80,
+            width: 240,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: scheme.primaryContainer,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+          );
+        }
+
+        if (data == null) {
+          return Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: scheme.surfaceContainerHighest,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.pets, color: scheme.onSurfaceVariant, size: 24),
+                const SizedBox(width: 8),
+                Text(
+                  'İlan artık yayında değil',
+                  style: TextStyle(fontSize: 14, color: scheme.onSurfaceVariant),
+                ),
+              ],
+            ),
+          );
+        }
+
+        final url = data['imagePath']?.toString() ?? '';
+        final title = data['title']?.toString() ?? '';
+        final kinds = data['Kinds']?.toString() ?? '';
+
+        return InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => PetDetailPage(petId: petId, imagePath: url),
             ),
           ),
-        ],
-      ),
+          child: Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: scheme.primaryContainer,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: scheme.primary),
+            ),
+            child: Row(
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: SizedBox(
+                    width: 56,
+                    height: 56,
+                    child: AppNetworkImage(url: url, fit: BoxFit.cover),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          color: scheme.onPrimaryContainer,
+                        ),
+                      ),
+                      if (kinds.isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          kinds,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: scheme.onPrimaryContainer.withValues(alpha: 0.8),
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 2),
+                      Text(
+                        'İlanı Gör',
+                        style: TextStyle(fontSize: 12, color: scheme.primary),
+                      ),
+                    ],
+                  ),
+                ),
+                Icon(Icons.chevron_right, color: scheme.primary),
+              ],
+            ),
+          ),
+        );
+      },
     );
+  }
+
+  /// Lets the sender pick one of their own listings to share as a pet card.
+  /// The message payload is just the pet document id; the receiver's card
+  /// resolves it live, so a later title/photo edit stays reflected.
+  Future<void> _pickOwnPetAndShare() async {
+    try {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('pets')
+          .where('userUID', isEqualTo: widget.currentUserUID)
+          .limit(20)
+          .get();
+      if (!mounted) return;
+
+      final docs = snapshot.docs.toList()
+        ..sort((a, b) {
+          final at = (a.data()['timestamp'] as Timestamp?)?.toDate() ??
+              DateTime(2000);
+          final bt = (b.data()['timestamp'] as Timestamp?)?.toDate() ??
+              DateTime(2000);
+          return bt.compareTo(at);
+        });
+
+      if (docs.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Paylaşılacak bir ilanınız yok.')),
+        );
+        return;
+      }
+
+      await showModalBottomSheet<void>(
+        context: context,
+        showDragHandle: true,
+        builder: (sheetContext) => SafeArea(
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: docs.length,
+            itemBuilder: (sheetContext, i) {
+              final d = docs[i].data();
+              return ListTile(
+                leading: ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: SizedBox(
+                    width: 48,
+                    height: 48,
+                    child: AppNetworkImage(
+                      url: d['imagePath']?.toString() ?? '',
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                ),
+                title: Text(d['title']?.toString() ?? ''),
+                subtitle: Text(d['Kinds']?.toString() ?? ''),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _sendMessage(
+                    messageText: docs[i].id,
+                    type: 'pet_card',
+                  );
+                },
+              );
+            },
+          ),
+        ),
+      );
+    } catch (e) {
+      debugPrint('Hayvan kartı paylaşılamadı: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('İlanlar yüklenemedi.')),
+        );
+      }
+    }
   }
 
   Widget _buildProductCardMessage(String productData) {
@@ -784,7 +1001,7 @@ class _MessagePageState extends State<MessagePage> {
               title: const Text('Hayvan Paylaş'),
               onTap: () {
                 Navigator.pop(context);
-                // TODO: Implement pet card sharing
+                _pickOwnPetAndShare();
               },
             ),
             ListTile(
@@ -843,12 +1060,32 @@ class _MessagePageState extends State<MessagePage> {
     }
   }
 
+  /// Sends real coordinates. geolocator runs on web (browser geolocation API)
+  /// and on mobile. Failures surface as a snackbar instead of silently sending
+  /// the coordinate-less placeholder message.
   Future<void> _sendLocation() async {
-    // TODO: Implement location sharing using geolocator
-    await _sendMessage(
-      messageText: '📍 Konum paylaşıldı',
-      type: 'location',
-    );
+    try {
+      setState(() => _isLoading = true);
+      final position = await Geolocator.getCurrentPosition();
+      if (!mounted) return;
+      await _sendMessage(
+        messageText:
+            '${position.latitude.toStringAsFixed(6)},'
+            '${position.longitude.toStringAsFixed(6)}',
+        type: 'location',
+      );
+    } catch (e) {
+      debugPrint('Error getting location: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Konum alınamadı. Lütfen tekrar deneyin.'),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   Future<void> _sendMessage({
